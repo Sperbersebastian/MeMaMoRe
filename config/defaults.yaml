@@ -1,0 +1,20 @@
+global:
+  threads: 16
+  contig_min_len: 1000
+  ani: 95
+  cov: 85
+
+modules:
+  ingest:
+    make_testsets: true
+    test_fraction: 0.10
+    test_seed: 42
+  qc:
+    fastp:
+      length_required: 50
+      qualified_quality_phred: 15
+      unqualified_percent_limit: 40
+  assembly:
+    metaspades:
+      only_assembler: false
+      kmers: [21,33,55,77,99,127]

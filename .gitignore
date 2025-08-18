@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# Generated state & logs
+runs/
+logs/
+SRA/.state/
+
+# Local config
+config/local.yaml
+
+# Large data
+SRA/raw_fastq/
+SRA/raw_fasta/
+SRA/testsets/
+SRA/qc/
+SRA/assemblies/
+SRA/mags/
+SRA/plasmids/
+SRA/viruses/
+SRA/args/
+SRA/taxonomy/
+
+# OS/IDE
+.DS_Store
+.vscode/
