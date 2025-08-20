@@ -1,5 +1,5 @@
 global:
-  threads: 16
+  threads: 8
   contig_min_len: 1000
   ani: 95
   cov: 85
