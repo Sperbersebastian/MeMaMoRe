@@ -15,6 +15,17 @@ getp(){ micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" -
 THREADS=$(getp global.threads)
 MINLEN=$(getp global.contig_min_len)
 
+LOG="$LOGS/assembly_spades_${SAMPLE}.log"
+CONTIGS="$OUTDIR/contigs.fasta"
+FILTERED="$OUTDIR/contigs.len${MINLEN}.fasta"
+
+# ── Skip logic ────────────────────────────────────────────────────────────
+if [[ -s "$FILTERED" && "${FORCE:-0}" != "1" ]]; then
+  echo "[assembly] Reusing existing filtered contigs for $SAMPLE: $FILTERED" >>"$LOG"
+  echo "{\"ts\":\"$(ts)\",\"module\":\"assembly\",\"program\":\"spades\",\"sample\":\"$SAMPLE\",\"phase\":\"done\",\"out\":{\"contigs\":\"$FILTERED\"},\"reuse\":true}" >> "$EVENTS"
+  exit 0
+fi
+
 # choose inputs
 IN1=""; IN2=""
 if [[ "${MODE:-full}" == "test" ]]; then
@@ -30,18 +41,27 @@ else
   if [[ -s "$T1" ]]; then IN1="$T1"; [[ -s "$T2" ]] && IN2="$T2"; else IN1="$R1"; IN2="${R2:-}"; fi
 fi
 
-# run spades
-LOG="$LOGS/assembly_spades_${SAMPLE}.log"
-if [[ -n "$IN2" ]]; then
-  micromamba run -n env_assembly_spades spades.py -1 "$IN1" -2 "$IN2" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
+# ── Run SPAdes only if needed ─────────────────────────────────────────────
+if [[ -s "$CONTIGS" && "${FORCE:-0}" != "1" ]]; then
+  echo "[assembly] Reusing existing SPAdes contigs for $SAMPLE: $CONTIGS" >>"$LOG"
 else
-  micromamba run -n env_assembly_spades spades.py -s "$IN1" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
+  if [[ -n "${FORCE:-}" && "$FORCE" == "1" ]]; then
+    rm -f "$OUTDIR"/*
+  fi
+  if [[ -n "$IN2" ]]; then
+    micromamba run -n env_assembly_spades spades.py -1 "$IN1" -2 "$IN2" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
+  else
+    micromamba run -n env_assembly_spades spades.py -s "$IN1" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
+  fi
 fi
 
-# filter contigs by length
-if [[ -s "$OUTDIR/contigs.fasta" ]]; then
-  export OUTDIR MINLEN
-  micromamba run -n env_sra_tools python - <<'PY'
+# ── Filter contigs by length (skip if already done unless FORCE) ──────────
+if [[ -s "$CONTIGS" ]]; then
+  if [[ -s "$FILTERED" && "${FORCE:-0}" != "1" ]]; then
+    echo "[assembly] Filtered file already exists, skipping: $FILTERED" >>"$LOG"
+  else
+    export OUTDIR MINLEN
+    micromamba run -n env_sra_tools python - <<'PY'
 import os
 outdir = os.environ["OUTDIR"]
 minlen = int(os.environ.get("MINLEN","1000"))
@@ -68,7 +88,7 @@ with open(path) as fr, open(outpath, "w") as fw:
             buf.append(line.strip())
     flush()
 PY
+  fi
 fi
 
-
-echo "{\"ts\":\"$(ts)\",\"module\":\"assembly\",\"program\":\"spades\",\"sample\":\"$SAMPLE\",\"phase\":\"done\",\"out\":{\"contigs\":\"$OUTDIR/contigs.len${MINLEN}.fasta\"}}" >> "$EVENTS"
+echo "{\"ts\":\"$(ts)\",\"module\":\"assembly\",\"program\":\"spades\",\"sample\":\"$SAMPLE\",\"phase\":\"done\",\"out\":{\"contigs\":\"$FILTERED\"}}" >> "$EVENTS"
