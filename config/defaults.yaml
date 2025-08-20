@@ -18,3 +18,6 @@ modules:
     metaspades:
       only_assembler: false
       kmers: [21,33,55,77,99,127]
+    qc:
+      breadth_min: 0.8
+      depth_min: 2.0
