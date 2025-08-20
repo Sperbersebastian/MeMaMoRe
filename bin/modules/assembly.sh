@@ -17,5 +17,8 @@ run_assembly(){
     [[ -n "${SAMPLE:-}" && "$SID" != "$SAMPLE" ]] && continue
     ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" MODE="$MODE" R1="$R1" R2="$R2" FORCE="${FORCE:-0}" \
       bash "$ROOT/modules/assembly/spades/exec.sh"
+    # after spades step per sample:
+    ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" MODE="$MODE" R1="$R1" R2="$R2" FORCE="${FORCE:-0}" \
+      bash "$ROOT/modules/assembly/contig_qc/exec.sh"
   done
 }
