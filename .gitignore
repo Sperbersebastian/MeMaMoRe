@@ -10,6 +10,9 @@ SRA/.state/
 # Local config
 config/local.yaml
 
+# Refdata
+refdata/
+
 # Large data
 SRA/raw_fastq/
 SRA/raw_fasta/
@@ -25,3 +28,49 @@ SRA/taxonomy/
 # OS/IDE
 .DS_Store
 .vscode/
+# binny / mantis runtime outputs & envs
+SRA/**/binny/**/intermediary/
+SRA/**/binny/**/bins/
+logs/
+job.errs.outs/
+**/.snakemake/
+**/.snakemake/*
+**/*.log
+
+# conda/mamba envs
+micromamba/
+.mamba/
+.conda/
+*_snk_binny_persist*/
+
+# MANTIS generated DB/chunks (do NOT commit)
+external/binny/database/hmms/**/chunks/
+external/binny/database/hmms/**/metadata.db
+external/binny/database/hmms/**/checkm_filtered_*.hmm.h3*
+external/binny/database/hmms/**/checkm_filtered_*.ssi
+
+# Keep vendored small assets (see adds below), ignore any other large refs
+external/binny/database/support/Resources/Taxonomy.db
+# binny / mantis runtime outputs & envs
+SRA/**/binny/**/intermediary/
+SRA/**/binny/**/bins/
+logs/
+job.errs.outs/
+**/.snakemake/
+**/.snakemake/*
+**/*.log
+
+# conda/mamba envs
+micromamba/
+.mamba/
+.conda/
+*_snk_binny_persist*/
+
+# MANTIS generated DB/chunks (do NOT commit)
+external/binny/database/hmms/**/chunks/
+external/binny/database/hmms/**/metadata.db
+external/binny/database/hmms/**/checkm_filtered_*.hmm.h3*
+external/binny/database/hmms/**/checkm_filtered_*.ssi
+
+# Keep vendored small assets (see adds below), ignore any other large refs
+external/binny/database/support/Resources/Taxonomy.db
