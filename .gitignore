@@ -19,6 +19,7 @@ SRA/raw_fasta/
 SRA/testsets/
 SRA/qc/
 SRA/assemblies/
+SRA/binning/
 SRA/mags/
 SRA/plasmids/
 SRA/viruses/
