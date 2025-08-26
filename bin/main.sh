@@ -80,7 +80,6 @@ case "$cmd" in
       qc)       run_qc_wrap       ;;
       assembly) run_assembly_wrap ;;
       binning)  run_binning_wrap  ;;
-      binny)    run_binny_direct  ;; 
       *) usage; exit 2;;
     esac
     ;;
