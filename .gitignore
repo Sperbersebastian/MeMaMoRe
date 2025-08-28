@@ -75,3 +75,4 @@ external/binny/database/hmms/**/checkm_filtered_*.ssi
 
 # Keep vendored small assets (see adds below), ignore any other large refs
 external/binny/database/support/Resources/Taxonomy.db
+external/

@@ -24,7 +24,7 @@ run_binning(){
     ASM_DIR="$ROOT/SRA/assemblies/spades/$SID"
     QC_DIR="$ROOT/SRA/assemblies/contig_qc/$SID"
     BINDIR="$ROOT/SRA/binning"; LOGS="$ROOT/logs"
-    mkdir -p "$BINDIR"/{coverage,metabat2,binny,magscot,checkm2,barrnap,trnascan,gtdbtk}/"$SID" "$LOGS"
+    mkdir -p "$BINDIR"/{coverage,metabat2,binny,comebin,magscot,checkm2,barrnap,trnascan,gtdbtk}/"$SID" "$LOGS"
 
     CONTIGS="$QC_DIR/contigs.filtered.fasta"
     [[ -s "$CONTIGS" ]] || CONTIGS="$ASM_DIR/contigs.len1000.fasta"
@@ -45,6 +45,13 @@ run_binning(){
     ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" CONTIGS="$CONTIGS" BAM="$BAM" \
       bash "$ROOT/modules/binning/binny/exec.sh"
 
+    # COMEBin
+    # uses SPAdes graph + contigs.fasta for IDs, BAM for depth (computes depth if missing)
+    GFA="$ASM_DIR/assembly_graph_with_scaffolds.gfa"
+    [[ -s "$GFA" ]] || { echo "[comebin] $SID missing $GFA"; }
+    ROOT="$ROOT" SAMPLE="$SID" BAM="$BAM" \
+      bash "$ROOT/modules/binning/comebin/exec.sh"
+
     # combine for MAGScoT
     MAGSCOT_DIR="$ROOT/SRA/binning/magscot/$SID"
     mkdir -p "$MAGSCOT_DIR"
@@ -52,7 +59,8 @@ run_binning(){
     : > "$MAGSCOT_IN"
     for f in \
       "$ROOT/SRA/binning/metabat2/$SID/contigs_to_bin.with_set.tsv" \
-      "$ROOT/SRA/binning/binny/$SID/contigs_to_bin.with_set.tsv"
+      "$ROOT/SRA/binning/binny/$SID/contigs_to_bin.with_set.tsv" \
+      "$ROOT/SRA/binning/comebin/$SID/contigs_to_bin.with_set.tsv"
     do
       [[ -s "$f" ]] && cat "$f" >> "$MAGSCOT_IN"
     done

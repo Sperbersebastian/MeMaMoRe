@@ -30,10 +30,17 @@ LOGS="$ROOT/logs"
 mkdir -p "$OUTDIR" "$LOGS"
 
 # -------- micromamba / snakemake driver env --------
+# micromamba + deterministic Snakemake conda prefix
 export MAMBA_ROOT_PREFIX="${MAMBA_ROOT_PREFIX:-$HOME/micromamba}"
 export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
-need micromamba
+command -v micromamba >/dev/null || { echo "micromamba missing"; exit 1; }
 eval "$(micromamba shell hook --shell=bash)"
+
+# discover root prefix and set a stable sub-env prefix for Snakemake
+ROOT_PREFIX="$(micromamba info | awk -F': ' '/Root prefix/ {print $2}')"
+_default_snk="$ROOT_PREFIX/envs/_snk_binny_persist"
+export SNAKEMAKE_CONDA_PREFIX="${SNAKEMAKE_CONDA_PREFIX:-$_default_snk}"
+
 
 if ! micromamba env list | grep -qE '^\s*binny_env\s'; then
   micromamba create -y -n binny_env -c conda-forge -c bioconda \
