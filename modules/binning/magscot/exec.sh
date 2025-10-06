@@ -1,84 +1,111 @@
 #!/usr/bin/env bash
+# MAGScoT runner with auto map build, robust parsing, and CTB cleanup
+# env: ROOT SAMPLE [CPUS]
 set -euo pipefail
-# env: ROOT SAMPLE
-INROOT="$ROOT/SRA/binning"
-OUT="$INROOT/magscot/$SAMPLE"
-LOG="$ROOT/logs/binning_magscot_${SAMPLE}.log"
+: "${ROOT:?}"; : "${SAMPLE:?}"; : "${CPUS:=8}"
+
+OUT="$ROOT/SRA/binning/magscot/$SAMPLE"
 mkdir -p "$OUT"
-echo "[magscot] start" >"$LOG"
 
-# 0) inputs: collect bins from available binners (MetaBAT2 for now)
-BIN_SOURCES=()
-for src in metabat2 comebin binny; do
-  d="$INROOT/$src/$SAMPLE"
-  if compgen -G "$d/bin*.fa*" > /dev/null; then BIN_SOURCES+=("$d"); fi
-done
-[[ ${#BIN_SOURCES[@]} -gt 0 ]] || { echo "[magscot] no input bins" | tee -a "$LOG"; exit 0; }
+CONTIGS="${CONTIGS:-$ROOT/SRA/assemblies/spades/$SAMPLE/contigs.fasta}"
+[[ -s "$CONTIGS" ]] || { echo "[magscot] $SAMPLE no contigs"; exit 0; }
 
-# 1) build contigs_to_bin (NO header): BinID \t ContigID \t Tool
-CTB="$OUT/contigs_to_bin.tsv"; : > "$CTB"
+mk_map_from_bins(){ # $1=dir $2=glob $3=tag $4=outfile
+  local d="$1" g="$2" tag="$3" out="$4"
+  [[ -s "$out" ]] && return 0
+  [[ -d "$d" ]] || return 0
+  : > "$out"; shopt -s nullglob
+  local had=0
+  for fa in "$d"/$g; do
+    [[ -s "$fa" ]] || continue
+    had=1
+    bin_base="$(basename "${fa%.*}")"
+    bin_id="${tag}|${bin_base}"
+    awk -v b="$bin_id" -v t="$tag" '
+      BEGIN{RS=">";FS="\n";OFS="\t"}
+      NR>1{
+        header=$1
+        sub(/^[[:space:]]+/,"",header)
+        contig=header
+        sub(/[[:space:]].*$/,"",contig)
+        if(length(contig)>0) print b,contig,t
+      }' "$fa" >> "$out"
+  done
+  (( had )) || : > "$out"
+}
 
-for tool in metabat2 comebin binny; do
-  d="$INROOT/$tool/$SAMPLE"
-  if compgen -G "$d/bin*.fa*" >/dev/null; then
-    for f in "$d"/bin*.fa*; do
-      [[ -s "$f" ]] || continue
-      binlabel="$(basename "${f%.*}")"        # e.g., bin.1
-      awk -v bin="$binlabel" -v tool="$tool" '
-        /^>/ { gsub(/^>/,""); split($0,a," "); print bin "\t" a[1] "\t" tool }
-      ' "$f" >> "$CTB"
-    done
-  fi
-done
-[[ -s "$CTB" ]] || { echo "[magscot] empty contigs_to_bin" | tee -a "$LOG"; exit 0; }
+# per-tool paths
+MB_DIR="$ROOT/SRA/binning/metabat2/$SAMPLE"
+BN_DIR="$ROOT/SRA/binning/binny/$SAMPLE/bins"
+CB_DIR="$ROOT/SRA/binning/comebin/$SAMPLE/comebin_res/comebin_res_bins"
 
-# 2) build per-sample HMM hits if MAGSCOT_HMM not set (Prodigal + HMMER)
-if [[ -z "${MAGSCOT_HMM:-}" ]]; then
-  echo "[magscot] building HMM hits (prodigal + hmmsearch)" | tee -a "$LOG"
-  ASM="$ROOT/SRA/assemblies/contig_qc/$SAMPLE/contigs.filtered.fasta"
-  [[ -s "$ASM" ]] || { echo "[magscot] missing assembly $ASM" | tee -a "$LOG"; exit 0; }
-  FAA="$OUT/${SAMPLE}.prodigal.faa"
-  micromamba run -n env_mags prodigal -p meta -i "$ASM" -a "$FAA" -o /dev/null >>"$LOG" 2>&1
-  [[ -s "$FAA" ]] || { echo "[magscot] prodigal failed" | tee -a "$LOG"; exit 0; }
-  # use GTDB r207 marker HMMs shipped with MAGScoT repo
-  TIGR="$MAGSCOT_DIR/hmm/gtdbtk_rel207_tigrfam.hmm"
-  PFAM="$MAGSCOT_DIR/hmm/gtdbtk_rel207_Pfam-A.hmm"
-  [[ -s "$TIGR" && -s "$PFAM" ]] || { echo "[magscot] GTDB r207 HMMs not found in $MAGSCOT_DIR/hmm" | tee -a "$LOG"; exit 0; }
-  TOUT="$OUT/${SAMPLE}.hmm.tigr.hit.out"
-  POUT="$OUT/${SAMPLE}.hmm.pfam.hit.out"
-  micromamba run -n env_mags hmmsearch -o "$OUT/tigr.log"  --tblout "$TOUT"  --noali --notextw --cut_nc --cpu 8 "$TIGR" "$FAA" >>"$LOG" 2>&1
-  micromamba run -n env_mags hmmsearch -o "$OUT/pfam.log"  --tblout "$POUT"  --noali --notextw --cut_nc --cpu 8 "$PFAM" "$FAA" >>"$LOG" 2>&1
-  # merge to MAGSCOT_HMM format
-  T_TAB="$OUT/${SAMPLE}.tigr"; P_TAB="$OUT/${SAMPLE}.pfam"; HMM_MERGED="$OUT/${SAMPLE}.hmm"
-  awk '($1 !~ /^#/){print $1"\t"$3"\t"$5}' "$TOUT" > "$T_TAB" || true
-  awk '($1 !~ /^#/){print $1"\t"$4"\t"$5}' "$POUT" > "$P_TAB" || true
-  cat "$P_TAB" "$T_TAB" > "$HMM_MERGED"
-  MAGSCOT_HMM="$HMM_MERGED"
-  echo "[magscot] HMM merged -> $MAGSCOT_HMM" | tee -a "$LOG"
+MB_MAP="$ROOT/SRA/binning/metabat2/$SAMPLE/contigs_to_bin.with_set.tsv"
+BN_MAP="$ROOT/SRA/binning/binny/$SAMPLE/contigs_to_bin.with_set.tsv"
+CB_MAP="$ROOT/SRA/binning/comebin/$SAMPLE/contigs_to_bin.with_set.tsv"
+
+mk_map_from_bins "$MB_DIR" "*.fa*" "metabat2" "$MB_MAP"
+mk_map_from_bins "$BN_DIR" "*.fa*" "binny"    "$BN_MAP"
+mk_map_from_bins "$CB_DIR" "*.fa*" "comebin"  "$CB_MAP"
+
+# combine → CTB.raw
+RAW="$OUT/contigs_to_bin.raw.tsv"
+: > "$RAW"
+for f in "$MB_MAP" "$BN_MAP" "$CB_MAP"; do [[ -s "$f" ]] && cat "$f" >> "$RAW"; done
+[[ -s "$RAW" ]] || { echo "[magscot] no bin inputs"; exit 0; }
+
+# cleanup:
+CTB="$OUT/contigs_to_bin.tsv"
+awk -F'\t' 'BEGIN{OFS="\t"} NF==3{k=$3 FS $2; if(!(k in seen)){seen[k]=1; print $0}}' "$RAW" \
+| awk -F'\t' 'BEGIN{OFS="\t"} {c[$1]++; rows[NR]=$0} END{for(i=1;i<=NR;i++){split(rows[i],f,"\t"); if(c[f[1]]>=2) print rows[i]}}' \
+> "$CTB"
+
+# sanity checks
+awk -F'\t' 'NF!=3{bad++} END{if(bad){print "[magscot] bad rows:",bad; exit 2}}' "$CTB"
+bins_n=$(cut -f1 "$CTB" | sort -u | wc -l)
+contigs_n=$(cut -f2 "$CTB" | sort -u | wc -l)
+echo "[magscot] CTB bins=$bins_n contigs=$contigs_n"
+if (( contigs_n < bins_n )); then
+  echo "[magscot] contigs < bins after cleanup → tighten filter or investigate inputs"; exit 2
 fi
 
-# 3) run MAGScoT (inside OUT so outputs land here)
-set +e
-( cd "$OUT" && micromamba run -n env_mags Rscript "$MAGSCOT_DIR/MAGScoT.R" \
-    -i "$CTB" --hmm "$MAGSCOT_HMM" ) >>"$LOG" 2>&1
-rc=$?; set -e
-if [[ $rc -ne 0 ]]; then echo "[magscot] failed (see $LOG)"; exit 0; fi
+# HMM inputs
+MAGS_ROOT="${MAGS_ROOT:-$ROOT/tools/MAGScoT}"
+HMM_TIGR="$MAGS_ROOT/hmm/gtdbtk_rel207_tigrfam.hmm"
+HMM_PFAM="$MAGS_ROOT/hmm/gtdbtk_rel207_Pfam-A.hmm"
+SCRIPT="$MAGS_ROOT/MAGScoT.R"
+if [[ ! -s "$SCRIPT" || ! -s "$HMM_TIGR" || ! -s "$HMM_PFAM" ]]; then
+  echo "[magscot] missing MAGScoT repo or HMMs under $MAGS_ROOT; skipping"; exit 0
+fi
 
-# 4) collect refined bins
-# collect refined bins
-mkdir -p "$OUT/bins"; shopt -s nullglob
-mv "$OUT"/*_bin*.fa* "$OUT/bins/" 2>/dev/null || true
+TMP="$OUT/tmp"; mkdir -p "$TMP"
+FAA="$OUT/prodigal.faa"
 
-if compgen -G "$OUT/bins/*" >/dev/null; then
-  echo "[magscot] refined bins -> $OUT/bins"
+# --- Step 4: Prodigal + HMMsearch with skip ---
+if [[ ! -s "$FAA" ]]; then
+  micromamba run -n env_binning prodigal -i "$CONTIGS" -p meta -a "$FAA" -d "$TMP/prodigal.ffn" -o "$TMP/prodigal.log"
+fi
+
+if [[ ! -s "$TMP/tigr.tbl" ]]; then
+  micromamba run -n env_binning hmmsearch -o "$TMP/tigr.out" --tblout "$TMP/tigr.tbl" --noali --notextw --cut_nc --cpu "$CPUS" "$HMM_TIGR" "$FAA"
+fi
+if [[ ! -s "$TMP/pfam.tbl" ]]; then
+  micromamba run -n env_binning hmmsearch -o "$TMP/pfam.out" --tblout "$TMP/pfam.tbl" --noali --notextw --cut_nc --cpu "$CPUS" "$HMM_PFAM" "$FAA"
+fi
+
+HMM_MAP="$OUT/example.hmm"
+if [[ ! -s "$HMM_MAP" ]]; then
+  awk 'BEGIN{OFS="\t"} $1!~/^#/{print $4,$1,$14}' "$TMP/tigr.tbl" > "$TMP/tigr.map"
+  awk 'BEGIN{OFS="\t"} $1!~/^#/{print $4,$1,$14}' "$TMP/pfam.tbl" > "$TMP/pfam.map"
+  cat "$TMP/pfam.map" "$TMP/tigr.map" > "$HMM_MAP"
+  cols="$(awk -F'\t' 'NF{print NF; exit}' "$HMM_MAP")"
+  [[ "$cols" -eq 3 ]] || { echo "[magscot] bad HMM map ($cols cols) → $HMM_MAP"; exit 1; }
+fi
+
+# --- Step 5: Final Rscript with skip ---
+if [[ ! -d "$OUT/MAGScoT" || -z "$(ls -A "$OUT/MAGScoT" 2>/dev/null)" ]]; then
+  micromamba run -n env_binning Rscript "$SCRIPT" -i "$CTB" --hmm "$HMM_MAP" -o "$OUT/MAGScoT"
 else
-  echo "[magscot] no refined outputs found; falling back to MetaBAT2 bins"
-  SRC="$INROOT/metabat2/$SAMPLE"
-  if compgen -G "$SRC/bin*.fa*" >/dev/null; then
-    cp "$SRC"/bin*.fa* "$OUT/bins/" 2>/dev/null || true
-    printf "REFINEMENT_SKIPPED\n" > "$OUT/bins/README.txt"
-    echo "[magscot] fallback copied -> $OUT/bins"
-  else
-    echo "[magscot] no MetaBAT2 bins to fallback to"
-  fi
+  echo "[magscot] skip Rscript, results exist in $OUT/MAGScoT"
 fi
+
+echo "[magscot] done → $OUT"

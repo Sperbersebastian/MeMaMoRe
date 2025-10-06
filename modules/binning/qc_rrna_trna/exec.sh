@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env: ROOT SAMPLE
+
 BINS="$ROOT/SRA/binning/magscot/$SAMPLE/bins"
 RR="$ROOT/SRA/binning/barrnap/$SAMPLE"
 TR="$ROOT/SRA/binning/trnascan/$SAMPLE"
-mkdir -p "$RR" "$TR"
-[[ -d "$BINS" ]] || { echo "[rRNA/tRNA] no refined bins"; exit 0; }
+LOG="$ROOT/logs/binning_qc_rrna_trna_${SAMPLE}.log"
+
+# reset outputs
+rm -rf "$RR" "$TR" "$LOG"
+mkdir -p "$RR" "$TR" "$(dirname "$LOG")"
+
+[[ -d "$BINS" ]] || { echo "[rRNA/tRNA] no refined bins" | tee -a "$LOG"; exit 0; }
 
 for f in "$BINS"/*.fa*; do
   base=$(basename "$f"); base="${base%.*}"
-  micromamba run -n env_binning barrnap --threads 8 < "$f" > "$RR/${base}.gff" 2>/dev/null || true
-  micromamba run -n env_binning tRNAscan-SE -o "$TR/${base}.tsv" -q "$f" 2>/dev/null || true
+  # reset per-file outputs
+  rm -f "$RR/${base}.gff" "$TR/${base}.tsv"
+  {
+    echo "[barrnap] $base"
+    micromamba run -n env_binning barrnap --threads 8 < "$f" > "$RR/${base}.gff"
+    echo "[tRNAscan-SE] $base"
+    micromamba run -n env_binning tRNAscan-SE -B -o "$TR/${base}.tsv" -q "$f"
+  } >>"$LOG" 2>&1 || true
 done
-echo "[rRNA/tRNA] -> $RR , $TR"
+
+echo "[rRNA/tRNA] -> $RR , $TR" | tee -a "$LOG"
