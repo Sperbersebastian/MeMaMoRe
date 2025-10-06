@@ -1,19 +1,32 @@
-# Python
+# --- Python
 __pycache__/
-*.pyc
+*.py[cod]
 
-# Generated state & logs
+# --- OS/IDE
+.DS_Store
+.vscode/
+
+# --- Run-Status, Logs, Working dirs
 runs/
 logs/
-SRA/.state/
+job.errs.outs/
+**/*.log
+**/.snakemake/
+**/.snakemake/*
 
-# Local config
+# --- Lokale Konfiguration
 config/local.yaml
 
-# Refdata
+# --- Umgebungen (nicht versionieren)
+micromamba/
+.mamba/
+.conda/
+*_snk_binny_persist*/
+
+# --- Referenzdaten komplett ignorieren (bei Bedarf gezielt whitelisten)
 refdata/
 
-# Large data
+# --- SRA: große Daten & Outputs ignorieren, aber Metadateien behalten
 SRA/raw_fastq/
 SRA/raw_fasta/
 SRA/testsets/
@@ -25,54 +38,25 @@ SRA/plasmids/
 SRA/viruses/
 SRA/args/
 SRA/taxonomy/
+SRA/.state/
 
-# OS/IDE
-.DS_Store
-.vscode/
-# binny / mantis runtime outputs & envs
+# Behalte README/Manifeste in SRA (falls vorhanden)
+!SRA/**/README.md
+!SRA/**/README.txt
+!SRA/**/manifest.tsv
+!SRA/**/samples.tsv
+
+# --- Binny/MANTIS spezifisch
 SRA/**/binny/**/intermediary/
 SRA/**/binny/**/bins/
-logs/
-job.errs.outs/
-**/.snakemake/
-**/.snakemake/*
-**/*.log
 
-# conda/mamba envs
-micromamba/
-.mamba/
-.conda/
-*_snk_binny_persist*/
-
-# MANTIS generated DB/chunks (do NOT commit)
 external/binny/database/hmms/**/chunks/
 external/binny/database/hmms/**/metadata.db
 external/binny/database/hmms/**/checkm_filtered_*.hmm.h3*
 external/binny/database/hmms/**/checkm_filtered_*.ssi
 
-# Keep vendored small assets (see adds below), ignore any other large refs
-external/binny/database/support/Resources/Taxonomy.db
-# binny / mantis runtime outputs & envs
-SRA/**/binny/**/intermediary/
-SRA/**/binny/**/bins/
-logs/
-job.errs.outs/
-**/.snakemake/
-**/.snakemake/*
-**/*.log
+# Behalte kleine, benötigte DB-Assets
+!external/binny/database/support/Resources/Taxonomy.db
 
-# conda/mamba envs
-micromamba/
-.mamba/
-.conda/
-*_snk_binny_persist*/
-
-# MANTIS generated DB/chunks (do NOT commit)
-external/binny/database/hmms/**/chunks/
-external/binny/database/hmms/**/metadata.db
-external/binny/database/hmms/**/checkm_filtered_*.hmm.h3*
-external/binny/database/hmms/**/checkm_filtered_*.ssi
-
-# Keep vendored small assets (see adds below), ignore any other large refs
-external/binny/database/support/Resources/Taxonomy.db
-external/
+# --- Sonstiges (falls versehentlich hinzugefügt)
+envs/*/env.lock
