@@ -67,11 +67,6 @@ case "$cmd" in
       ingest) run_ingest_wrap "${ARGS[@]:-}";;
       qc)     run_qc_wrap    "${ARGS[@]:-}";;
       assembly) source "$ROOT/bin/modules/assembly.sh"; m=/tmp/assembly_defaults.yaml; module_default_params > "$m"; p=/tmp/assembly_params.yaml; merge "$p" "$m"; PARAMS_YAML="$p" ROOT="$ROOT" MODE="$MODE" RESUME="$RESUME" FORCE="$FORCE" FROM="$FROM" ONLY="$ONLY" SAMPLE="$SAMPLE" run_assembly "${ARGS[@]:-}";;
-      qc)     run_qc_wrap    "${ARGS[@]:-}";;
-      assembly) source "$ROOT/bin/modules/assembly.sh"; m=/tmp/assembly_defaults.yaml; module_default_params > "$m"; p=/tmp/assembly_params.yaml; merge "$p" "$m"; PARAMS_YAML="$p" ROOT="$ROOT" MODE="$MODE" RESUME="$RESUME" FORCE="$FORCE" FROM="$FROM" ONLY="$ONLY" SAMPLE="$SAMPLE" run_assembly "${ARGS[@]:-}";;
-      qc)     run_qc_wrap    "${ARGS[@]:-}";;
-      assembly) source "$ROOT/bin/modules/assembly.sh"; m=/tmp/assembly_defaults.yaml; module_default_params > "$m"; p=/tmp/assembly_params.yaml; merge "$p" "$m"; PARAMS_YAML="$p" ROOT="$ROOT" MODE="$MODE" RESUME="$RESUME" FORCE="$FORCE" FROM="$FROM" ONLY="$ONLY" SAMPLE="$SAMPLE" run_assembly "${ARGS[@]:-}";;
-      qc)     run_qc_wrap    "${ARGS[@]:-}";;
       *) usage; exit 2;;
     esac
     ;;

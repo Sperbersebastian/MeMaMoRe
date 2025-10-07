@@ -46,7 +46,7 @@ BAM="$MAPDIR/${SAMPLE}.sorted.bam"
 if [[ -s "$BAM" && "${FORCE:-0}" != "1" ]]; then
   echo "[contig_qc] Reusing existing BAM for $SAMPLE" >> "$LOGS/map_${SAMPLE}.log"
 else
-  [[ "${FORCE:-0}" == "1" ]] && rm -f "$MAPDIR"/*
+  [[ "${FORCE:-0}" == "1" ]] && rm -f "${MAPDIR:?}"/*
   # index + map + sort
   if [[ ! -s "${REF}.0123" && ! -s "${REF}.bwt.2bit.64" ]]; then
     micromamba run -n env_mapping_coverm bwa-mem2 index "$REF" >"$LOGS/map_${SAMPLE}.log" 2>&1

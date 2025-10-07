@@ -6,7 +6,7 @@ OUTDIR="$ROOT/SRA/assemblies/spades/$SAMPLE"
 LOGS="$ROOT/logs"
 EVENTS="$ROOT/api/status.jsonl"
 mkdir -p "$OUTDIR" "$LOGS"
-[[ "${FORCE:-0}" == "1" ]] && rm -rf "$OUTDIR"/*
+[[ "${FORCE:-0}" == "1" ]] && rm -rf "${OUTDIR:?}"/*
 
 ts(){ date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 echo "{\"ts\":\"$(ts)\",\"module\":\"assembly\",\"program\":\"spades\",\"sample\":\"$SAMPLE\",\"phase\":\"start\"}" >> "$EVENTS"
@@ -46,7 +46,7 @@ if [[ -s "$CONTIGS" && "${FORCE:-0}" != "1" ]]; then
   echo "[assembly] Reusing existing SPAdes contigs for $SAMPLE: $CONTIGS" >>"$LOG"
 else
   if [[ -n "${FORCE:-}" && "$FORCE" == "1" ]]; then
-    rm -f "$OUTDIR"/*
+    rm -f "${OUTDIR:?}"/*
   fi
   if [[ -n "$IN2" ]]; then
     micromamba run -n env_assembly_spades spades.py -1 "$IN1" -2 "$IN2" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
