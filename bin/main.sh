@@ -36,6 +36,14 @@ run_qc_wrap(){
   PARAMS_YAML="$p" ROOT="$ROOT" MODE="$MODE" RESUME="$RESUME" FORCE="$FORCE" FROM="$FROM" ONLY="$ONLY" SAMPLE="$SAMPLE" run_qc "$@"
 }
 
+run_assembly_wrap(){
+  # shellcheck source=/dev/null
+  source "$ROOT/bin/modules/assembly.sh"
+  m=/tmp/assembly_defaults.yaml; module_default_params > "$m"
+  p=/tmp/assembly_params.yaml; merge "$p" "$m"
+  PARAMS_YAML="$p" ROOT="$ROOT" MODE="$MODE" RESUME="$RESUME" FORCE="$FORCE" FROM="$FROM" ONLY="$ONLY" SAMPLE="$SAMPLE" run_assembly "$@"
+}
+
 cmd="${1:-}"; shift || true
 
 case "$cmd" in
@@ -64,14 +72,9 @@ case "$cmd" in
     done
     # 3) dispatch
     case "$mod" in
-      ingest) run_ingest_wrap "${ARGS[@]:-}";;
-      qc)     run_qc_wrap    "${ARGS[@]:-}";;
-      assembly) source "$ROOT/bin/modules/assembly.sh"; m=/tmp/assembly_defaults.yaml; module_default_params > "$m"; p=/tmp/assembly_params.yaml; merge "$p" "$m"; PARAMS_YAML="$p" ROOT="$ROOT" MODE="$MODE" RESUME="$RESUME" FORCE="$FORCE" FROM="$FROM" ONLY="$ONLY" SAMPLE="$SAMPLE" run_assembly "${ARGS[@]:-}";;
-      qc)     run_qc_wrap    "${ARGS[@]:-}";;
-      assembly) source "$ROOT/bin/modules/assembly.sh"; m=/tmp/assembly_defaults.yaml; module_default_params > "$m"; p=/tmp/assembly_params.yaml; merge "$p" "$m"; PARAMS_YAML="$p" ROOT="$ROOT" MODE="$MODE" RESUME="$RESUME" FORCE="$FORCE" FROM="$FROM" ONLY="$ONLY" SAMPLE="$SAMPLE" run_assembly "${ARGS[@]:-}";;
-      qc)     run_qc_wrap    "${ARGS[@]:-}";;
-      assembly) source "$ROOT/bin/modules/assembly.sh"; m=/tmp/assembly_defaults.yaml; module_default_params > "$m"; p=/tmp/assembly_params.yaml; merge "$p" "$m"; PARAMS_YAML="$p" ROOT="$ROOT" MODE="$MODE" RESUME="$RESUME" FORCE="$FORCE" FROM="$FROM" ONLY="$ONLY" SAMPLE="$SAMPLE" run_assembly "${ARGS[@]:-}";;
-      qc)     run_qc_wrap    "${ARGS[@]:-}";;
+      ingest)   run_ingest_wrap   "${ARGS[@]:-}";;
+      qc)       run_qc_wrap       "${ARGS[@]:-}";;
+      assembly) run_assembly_wrap "${ARGS[@]:-}";;
       *) usage; exit 2;;
     esac
     ;;
