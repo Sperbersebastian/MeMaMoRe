@@ -1,4 +1,4 @@
-# --- Python
+# --- Python junk
 __pycache__/
 *.py[cod]
 
@@ -6,57 +6,32 @@ __pycache__/
 .DS_Store
 .vscode/
 
-# --- Run-Status, Logs, Working dirs
+# --- Logs & runtime state
 runs/
 logs/
 job.errs.outs/
 **/*.log
 **/.snakemake/
-**/.snakemake/*
 
-# --- Lokale Konfiguration
+# --- Local config
 config/local.yaml
 
-# --- Umgebungen (nicht versionieren)
+# --- Environments
 micromamba/
 .mamba/
 .conda/
 *_snk_binny_persist*/
 
-# --- Referenzdaten komplett ignorieren (bei Bedarf gezielt whitelisten)
+# --- Reference data
 refdata/
 
-# --- SRA: große Daten & Outputs ignorieren, aber Metadateien behalten
-SRA/raw_fastq/
-SRA/raw_fasta/
-SRA/testsets/
-SRA/qc/
-SRA/assemblies/
-SRA/binning/
-SRA/mags/
-SRA/plasmids/
-SRA/viruses/
-SRA/args/
-SRA/taxonomy/
-SRA/.state/
-
-# Behalte README/Manifeste in SRA (falls vorhanden)
+# --- SRA: ignore everything except README.md
+SRA/*
 !SRA/**/README.md
-!SRA/**/README.txt
-!SRA/**/manifest.tsv
-!SRA/**/samples.tsv
 
-# --- Binny/MANTIS spezifisch
-SRA/**/binny/**/intermediary/
-SRA/**/binny/**/bins/
+# --- External tools: ignore everything except README.md
+external/*
+!external/README.md
 
-external/binny/database/hmms/**/chunks/
-external/binny/database/hmms/**/metadata.db
-external/binny/database/hmms/**/checkm_filtered_*.hmm.h3*
-external/binny/database/hmms/**/checkm_filtered_*.ssi
-
-# Behalte kleine, benötigte DB-Assets
-!external/binny/database/support/Resources/Taxonomy.db
-
-# --- Sonstiges (falls versehentlich hinzugefügt)
+# --- Misc
 envs/*/env.lock
