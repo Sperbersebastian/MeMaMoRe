@@ -26,6 +26,7 @@ micromamba/
 
 # --- Reference data
 refdata/
+test/
 
 # --- SRA: ignore everything except README.md
 SRA/*
