@@ -18,7 +18,6 @@ YAML
 # minimal tool preflight (fail fast)
 _need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing tool: $1"; exit 127; }; }
 _preflight(){
-  # _need yq
   _need bash
   _need micromamba
 }
