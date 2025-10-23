@@ -2,4 +2,5 @@
 set -euo pipefail
 export MAMBA_ROOT_PREFIX="${MAMBA_ROOT_PREFIX:-$HOME/micromamba}"
 export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
-micromamba create -y -n env_assembly_spades -c bioconda -c conda-forge spades
+ENV=env_ingest
+micromamba create -y -n "$ENV" -c conda-forge python=3.10 pandas pyyaml click

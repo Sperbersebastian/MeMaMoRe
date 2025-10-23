@@ -2,19 +2,23 @@
 set -euo pipefail
 # env: ROOT PARAMS_YAML SAMPLE MODE R1 R2 FORCE
 
+# --- ensure dirs ---
+LOGS="$ROOT/logs"
+EVENTS="$ROOT/api/status.jsonl"
+mkdir -p "$LOGS" "$(dirname "$EVENTS")"
+
+# --- params ---
 THREADS=$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" --defaults "$PARAMS_YAML" --get global.threads)
 BREADTH_MIN=$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" --defaults "$PARAMS_YAML" --get modules.assembly.qc.breadth_min)
 DEPTH_MIN=$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" --defaults "$PARAMS_YAML" --get modules.assembly.qc.depth_min)
 
+# --- paths ---
 OUTBASE="$ROOT/SRA/assemblies/spades/$SAMPLE"
-LOGS="$ROOT/logs"; EVENTS="$ROOT/api/status.jsonl"
 MAPDIR="$OUTBASE/map"; mkdir -p "$MAPDIR"
 
-# Step 1 — QC base
 QCBASE="$ROOT/SRA/assemblies/contig_qc/$SAMPLE"
 mkdir -p "$QCBASE"
 
-# Step 2 — QC file paths
 keep_tsv="$QCBASE/contigs_kept.tsv"
 drop_tsv="$QCBASE/contigs_dropped.tsv"
 filtered_fa="$QCBASE/contigs.filtered.fasta"
@@ -23,11 +27,11 @@ mapcounts="$QCBASE/mapping_counts.tsv"
 ts(){ date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 echo "{\"ts\":\"$(ts)\",\"module\":\"assembly\",\"program\":\"contig_qc\",\"sample\":\"$SAMPLE\",\"phase\":\"start\"}" >> "$EVENTS"
 
-# assembly (prefer len-filtered)
+# --- assembly fasta (prefer len-filtered) ---
 REF="$OUTBASE/contigs.len1000.fasta"; [[ -s "$REF" ]] || REF="$OUTBASE/contigs.fasta"
 [[ -s "$REF" ]] || { echo "[contig_qc] no assembly for $SAMPLE" >&2; exit 2; }
 
-# choose reads
+# --- choose reads (test fallback to raw if missing) ---
 if [[ "${MODE:-full}" == "test" ]]; then
   if [[ -n "${R2:-}" ]]; then
     IN1="$ROOT/SRA/testsets/$SAMPLE/${SAMPLE}_1.10p.fastq.gz"
@@ -35,33 +39,38 @@ if [[ "${MODE:-full}" == "test" ]]; then
   else
     IN1="$ROOT/SRA/testsets/$SAMPLE/${SAMPLE}.10p.fastq.gz"; IN2=""
   fi
+  [[ -s "$IN1" ]] || { IN1="$R1"; IN2="${R2:-}"; }
 else
   T1="$ROOT/SRA/qc/fastp/$SAMPLE/${SAMPLE}_trimmed_1.fastq.gz"
   T2="$ROOT/SRA/qc/fastp/$SAMPLE/${SAMPLE}_trimmed_2.fastq.gz"
-  if [[ -s "$T1" ]]; then IN1="$T1"; [[ -s "$T2" ]] && IN2="$T2" || IN2=""; else IN1="$R1"; IN2="${R2:-}"; fi
+  if [[ -s "$T1" ]]; then
+    IN1="$T1"; IN2=""; [[ -s "$T2" ]] && IN2="$T2"
+  else
+    IN1="$R1"; IN2="${R2:-}"
+  fi
 fi
 
-# mapping → BAM stays under spades/<sample>/map/
+# --- map reads (BWA-MEM2) ---
 BAM="$MAPDIR/${SAMPLE}.sorted.bam"
 if [[ -s "$BAM" && "${FORCE:-0}" != "1" ]]; then
   echo "[contig_qc] Reusing existing BAM for $SAMPLE" >> "$LOGS/map_${SAMPLE}.log"
 else
-  [[ "${FORCE:-0}" == "1" ]] && rm -f "$MAPDIR"/*
-  # index + map + sort
+  [[ "${FORCE:-0}" == "1" ]] && rm -f "$MAPDIR"/* || true
+  # index reference if needed
   if [[ ! -s "${REF}.0123" && ! -s "${REF}.bwt.2bit.64" ]]; then
     micromamba run -n env_mapping_coverm bwa-mem2 index "$REF" >"$LOGS/map_${SAMPLE}.log" 2>&1
   fi
   if [[ -n "$IN2" ]]; then
-    micromamba run -n env_mapping_coverm bash -c \
+    micromamba run -n env_mapping_coverm bash -lc \
       "bwa-mem2 mem -t $THREADS '$REF' '$IN1' '$IN2' | samtools sort -@ $THREADS -o '$BAM'" >>"$LOGS/map_${SAMPLE}.log" 2>&1
   else
-    micromamba run -n env_mapping_coverm bash -c \
+    micromamba run -n env_mapping_coverm bash -lc \
       "bwa-mem2 mem -t $THREADS '$REF' '$IN1' | samtools sort -@ $THREADS -o '$BAM'" >>"$LOGS/map_${SAMPLE}.log" 2>&1
   fi
   micromamba run -n env_mapping_coverm samtools index "$BAM" >>"$LOGS/map_${SAMPLE}.log" 2>&1
 fi
 
-# CoverM per-contig metrics → Step 3: keep in spades/<sample>/map/
+# --- CoverM per-contig ---
 COVALL="$MAPDIR/coverm_contigs.tsv"
 if [[ -n "$IN2" ]]; then
   micromamba run -n env_mapping_coverm coverm contig \
@@ -77,7 +86,7 @@ else
     > "$COVALL" 2>>"$LOGS/map_${SAMPLE}.log"
 fi
 
-# ---- filter + tables + filtered FASTA ----
+# --- filter contigs + write filtered FASTA ---
 export REF COVALL keep_tsv drop_tsv filtered_fa BREADTH_MIN DEPTH_MIN
 micromamba run -n env_sra_tools python - <<'PY'
 import csv, os, math, sys
@@ -96,7 +105,6 @@ if not os.path.exists(cov) or os.path.getsize(cov)==0:
 with open(cov, newline='') as f:
     reader = csv.reader(f, delimiter='\t')
     header = next(reader)
-    cols = {name:i for i,name in enumerate(header)}
 
 def find_suffix(*suffixes):
     lower = [h.lower() for h in header]
@@ -123,6 +131,7 @@ with open(cov, newline='') as f:
     for row in r:
         if not row: continue
         try:
+            cols = {name:i for i,name in enumerate(header)}
             name = row[cols[C_CONTIG]].split()[0]
             br   = float(row[cols[C_BREADTH]])
             md   = float(row[cols[C_MEAN]])
@@ -171,7 +180,7 @@ with open(filt_fa,'w') as o:
                 o.write(seq[i:i+80]+'\n')
 PY
 
-# ---- mapped read counts (idxstats + total_primary) → summaries to QCBASE ----
+# --- mapping summaries ---
 IDX="$MAPDIR/idxstats.tsv"
 micromamba run -n env_mapping_coverm samtools idxstats "$BAM" > "$IDX"
 micromamba run -n env_mapping_coverm samtools view -c -F 256 -F 2048 "$BAM" > "$MAPDIR/total_primary.txt"
@@ -181,8 +190,8 @@ micromamba run -n env_sra_tools python - <<'PY'
 import csv, os
 idx = os.path.join(os.environ["MAPDIR"], "idxstats.tsv")
 totp = os.path.join(os.environ["MAPDIR"], "total_primary.txt")
-keep_tsv = os.path.join(os.environ["keep_tsv"])  # path already absolute
-out_tsv  = os.path.join(os.environ["mapcounts"])
+keep_tsv = os.environ["keep_tsv"]
+out_tsv  = os.environ["mapcounts"]
 
 kept=set()
 with open(keep_tsv) as f:

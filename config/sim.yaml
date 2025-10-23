@@ -1,0 +1,22 @@
+set_name: "miniset"
+read_len: 150
+model: "HiSeq"
+cpus: 8
+seed: 42
+hosts:
+  hq: "NC_000913.3"      # E. coli K-12 MG1655
+  lq: "NC_002516.2"      # P. aeruginosa PAO1
+plasmids: ["NC_013353.1","CP000648.1","CP006657.1"]   # pEK499, pKPN3, pECLO
+phages:   ["NC_001604.1","NC_001416.1","NC_001422.1"] # T7, lambda, phiX174
+# Put in config/sim.yaml
+n_reads: 835000   # ≈ 0.835 M pairs
+abundances:
+  NC_000913.3: 0.309333    # E. coli ~40×
+  NC_002516.2: 0.083467    # P. aeruginosa ~8×
+  NC_013353.1: 0.006854    # pEK499 ~35×
+  CP000648.1:  0.007350    # pKPN3 ~25×
+  CP006657.1:  0.005170    # pECLO ~20×
+  NC_001604.1: 0.002660    # T7 ~40×
+  NC_001416.1: 0.002425    # lambda ~30×
+  NC_001422.1: 0.000450    # phiX174 ~50×
+

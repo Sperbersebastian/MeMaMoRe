@@ -1,2 +1,1 @@
-sample_id	country	management	R1	R2	FASTA
-testA	ISR	Conv	/media/Box/MeMaMoRe/SRA/raw_fastq/testA/testA_1.fastq.gz	/media/Box/MeMaMoRe/SRA/raw_fastq/testA/testA_2.fastq.gz	
+miniset	SRA/reads/miniset/metagenome_R1.fastq.gz	SRA/reads/miniset/metagenome_R2.fastq.gz

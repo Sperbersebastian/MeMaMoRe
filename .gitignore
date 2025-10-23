@@ -7,6 +7,7 @@ __pycache__/
 .vscode/
 
 # --- Logs & runtime state
+api/
 runs/
 logs/
 job.errs.outs/
@@ -21,6 +22,7 @@ micromamba/
 .mamba/
 .conda/
 *_snk_binny_persist*/
+.snk_envs/
 
 # --- Reference data
 refdata/
@@ -28,6 +30,10 @@ refdata/
 # --- SRA: ignore everything except README.md
 SRA/*
 !SRA/**/README.md
+
+# --- temp: ignore everything
+temp/*
+
 
 # --- External tools: ignore everything except README.md
 external/*
