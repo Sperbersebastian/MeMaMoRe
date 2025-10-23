@@ -49,9 +49,9 @@ else
     rm -f "$OUTDIR"/*
   fi
   if [[ -n "$IN2" ]]; then
-    micromamba run -n env_assembly metaspades.py -1 "$IN1" -2 "$IN2" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
+    micromamba run -n env_assembly_core metaspades.py -1 "$IN1" -2 "$IN2" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
   else
-    micromamba run -n env_assembly metaspades.py -s "$IN1" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
+    micromamba run -n env_assembly_core metaspades.py -s "$IN1" -o "$OUTDIR" -t "$THREADS" --only-assembler >"$LOG" 2>&1
   fi
 fi
 
