@@ -4,11 +4,26 @@
 set -euo pipefail
 ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 
+
+# --- trace who invoked me ---
+printf '[mps] invoked by PPID=%s CMD="%s"\n' "$PPID" "$(ps -o command= -p "$PPID" | tail -n1)"
+command -v pstree >/dev/null 2>&1 && { echo "[mps] pstree:"; pstree -salp $$ | sed -n '1,8p'; }
+
+# Only run MPS if explicitly requested:
+#  - ONLY=metaplasmidspades
+#  - or MODULE_CONTEXT=plasmids (set by plasmids orchestrator)
+if [[ "${ONLY:-}" != "metaplasmidspades" && "${MODULE_CONTEXT:-}" != "plasmids" ]]; then
+  echo "[mps] guarded: skipping (set ONLY=metaplasmidspades or MODULE_CONTEXT=plasmids)"
+  exit 0
+fi
+
+
 # collect reads from both layouts, ohne eval/CRLF-Probleme
 # --- collect reads (only from qc/fastp) ---
 shopt -s nullglob
-R1=( "$ROOT/SRA/qc/fastp/$SAMPLE/"*_R1*.fastq.gz "$ROOT/SRA/qc/fastp/$SAMPLE/"*trimmed_1*.fastq.gz )
-R2=( "$ROOT/SRA/qc/fastp/$SAMPLE/"*_R2*.fastq.gz "$ROOT/SRA/qc/fastp/$SAMPLE/"*trimmed_2*.fastq.gz )
+R1=( "$ROOT/SRA/qc/fastp/$SAMPLE/"*trimmed_1*.fastq.gz )
+R2=( "$ROOT/SRA/qc/fastp/$SAMPLE/"*trimmed_2*.fastq.gz )
+
 shopt -u nullglob
 
 [[ ${#R1[@]} -gt 0 ]] || { echo "[mps] no R1 reads found in qc/fastp"; exit 3; }

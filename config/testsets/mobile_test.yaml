@@ -1,0 +1,26 @@
+set_name: "mobile_test"
+read_len: 150
+cpus: 8
+seed: 42
+
+plasmids:
+  - NC_013353.1   # pEK499
+  - CP000648.1    # pKPN3
+  - CP006657.1    # pECLO
+
+phages:
+  - NC_001604.1   # T7
+  - NC_001416.1   # lambda
+  - NC_001422.1   # phiX174
+
+hosts: {}
+
+n_reads: 200000
+
+abundances:
+  NC_013353.1: 0.25
+  CP000648.1:  0.23
+  CP006657.1:  0.17
+  NC_001604.1: 0.13
+  NC_001416.1: 0.12
+  NC_001422.1: 0.10

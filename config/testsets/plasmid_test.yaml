@@ -1,0 +1,19 @@
+set_name: "plasmid_test"
+read_len: 150
+cpus: 8
+seed: 42
+
+plasmids:
+  - NC_013353.1   # pEK499
+  - CP000648.1    # pKPN3
+  - CP006657.1    # pECLO
+
+hosts: {}
+phages: []
+
+n_reads: 150000
+
+abundances:
+  NC_013353.1: 0.40
+  CP000648.1:  0.35
+  CP006657.1:  0.25
