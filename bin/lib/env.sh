@@ -85,7 +85,19 @@ _resolve_creator(){
   return 1
 }
 
-_list_env_names(){ micromamba env list | awk 'NR>2{print $1}' | sed '/^$/d'; }
+# Cache for environment list to avoid repeated micromamba calls
+_ENV_LIST_CACHE=""
+_ENV_LIST_TIMESTAMP=0
+
+_list_env_names(){ 
+  local now=$(date +%s)
+  # Cache for 5 seconds to avoid excessive micromamba calls
+  if [[ -z "$_ENV_LIST_CACHE" || $(( now - _ENV_LIST_TIMESTAMP )) -gt 5 ]]; then
+    _ENV_LIST_CACHE="$(micromamba env list | awk 'NR>2{print $1}' | sed '/^$/d')"
+    _ENV_LIST_TIMESTAMP=$now
+  fi
+  echo "$_ENV_LIST_CACHE"
+}
 
 _env_exists(){
   local name="$1"

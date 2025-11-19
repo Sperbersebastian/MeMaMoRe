@@ -25,7 +25,10 @@ mkdir -p "$OUT" "$DB_BASE"
 command -v genomad >/dev/null 2>&1 || { echo "[genomad] genomad not in PATH"; exit 3; }
 
 # ---------- ensure database ----------
-if [[ ! -f "$DB/version.txt" ]]; then
+# Check database existence first before attempting download
+if [[ -f "$DB/version.txt" ]]; then
+  echo "[genomad] DB ready: $DB"
+else
   echo "[genomad] DB missing -> downloading to $DB_BASE"
   ( cd "$DB_BASE" && genomad download-database . )
   [[ -f "$DB/version.txt" ]] || { echo "[genomad] DB download failed at $DB"; exit 2; }

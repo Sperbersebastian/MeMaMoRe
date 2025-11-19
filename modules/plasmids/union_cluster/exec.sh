@@ -20,45 +20,44 @@ COV="${COV:-80}"
 # 1) Build union (no Stampede needed)
 [[ "$FORCE" == "1" ]] && rm -f "$RAW"
 if [[ ! -s "$RAW" ]]; then
-  tmp="$UOUT/.gather.$$.fa"; : > "$tmp"
+  tmp="$UOUT/.gather.$$.fa"
+  
+  # Combine all sources with their prefixes into a single temp file, then filter by length
+  {
+    # viralVerify
+    [[ -s "$BASE/viralverify/Prediction_results_fasta/contigs_plasmid.fasta" ]] && \
+      awk -v p="vv" '/^>/{sub(/^>/,">"p"|")}1' \
+         "$BASE/viralverify/Prediction_results_fasta/contigs_plasmid.fasta"
+    [[ -s "$BASE/viralverify/Prediction_results_fasta/contigs_plasmid_uncertain.fasta" ]] && \
+      awk -v p="vv_uncertain" '/^>/{sub(/^>/,">"p"|")}1' \
+         "$BASE/viralverify/Prediction_results_fasta/contigs_plasmid_uncertain.fasta"
 
-  # viralVerify
-  [[ -s "$BASE/viralverify/Prediction_results_fasta/contigs_plasmid.fasta" ]] \
-    && awk -v p="vv" '/^>/{sub(/^>/,">"p"|")}1' \
-       "$BASE/viralverify/Prediction_results_fasta/contigs_plasmid.fasta" >> "$tmp"
-  [[ -s "$BASE/viralverify/Prediction_results_fasta/contigs_plasmid_uncertain.fasta" ]] \
-    && awk -v p="vv_uncertain" '/^>/{sub(/^>/,">"p"|")}1' \
-       "$BASE/viralverify/Prediction_results_fasta/contigs_plasmid_uncertain.fasta" >> "$tmp"
+    # geNomad
+    [[ -s "$BASE/genomad/contigs_summary/contigs_plasmid.fna" ]] && \
+      awk -v p="genomad" '/^>/{sub(/^>/,">"p"|")}1' \
+         "$BASE/genomad/contigs_summary/contigs_plasmid.fna"
 
-  # geNomad
-  [[ -s "$BASE/genomad/contigs_summary/contigs_plasmid.fna" ]] \
-    && awk -v p="genomad" '/^>/{sub(/^>/,">"p"|")}1' \
-       "$BASE/genomad/contigs_summary/contigs_plasmid.fna" >> "$tmp"
+    # PLASMe (prefer filtered)
+    if [[ -s "$BASE/plasme/filtered_hp/plasme.hp.filtered.fasta" ]]; then
+      awk -v p="plasme" '/^>/{sub(/^>/,">"p"|")}1' \
+        "$BASE/plasme/filtered_hp/plasme.hp.filtered.fasta"
+    else
+      pf="$(ls -1 "$BASE/plasme/"*.fa "$BASE/plasme/"*.fna "$BASE/plasme/"*.fasta 2>/dev/null | head -n1 || true)"
+      [[ -n "${pf:-}" && -s "$pf" ]] && awk -v p="plasme" '/^>/{sub(/^>/,">"p"|")}1' "$pf"
+    fi
 
-  # PLASMe (prefer filtered)
-  if [[ -s "$BASE/plasme/filtered_hp/plasme.hp.filtered.fasta" ]]; then
-    awk -v p="plasme" '/^>/{sub(/^>/,">"p"|")}1' \
-      "$BASE/plasme/filtered_hp/plasme.hp.filtered.fasta" >> "$tmp"
-  else
-    pf="$(ls -1 "$BASE/plasme/"*.fa "$BASE/plasme/"*.fna "$BASE/plasme/"*.fasta 2>/dev/null | head -n1 || true)"
-    [[ -n "${pf:-}" ]] && awk -v p="plasme" '/^>/{sub(/^>/,">"p"|")}1' "$pf" >> "$tmp"
-  fi
-
-  # MOB-recon
-  for f in "$BASE"/mobrecon/*reconstructed*.fasta "$BASE"/mobrecon/*plasmid*.fasta; do
-    [[ -s "$f" ]] && awk -v p="mobrecon" '/^>/{sub(/^>/,">"p"|")}1' "$f" >> "$tmp"
-  done
-
-  # length filter
-  awk -v MIN="$MIN_LEN" '
+    # MOB-recon
+    for f in "$BASE"/mobrecon/*reconstructed*.fasta "$BASE"/mobrecon/*plasmid*.fasta; do
+      [[ -s "$f" ]] && awk -v p="mobrecon" '/^>/{sub(/^>/,">"p"|")}1' "$f"
+    done
+  } | awk -v MIN="$MIN_LEN" '
     /^>/{
       if (seqlen>=MIN && hdr!=""){print hdr; print seq}
       hdr=$0; seq=""; seqlen=0; next
     }
     {seqlen+=length($0); seq=seq $0}
     END{ if (seqlen>=MIN && hdr!=""){print hdr; print seq} }
-  ' "$tmp" > "$RAW"
-  rm -f "$tmp"
+  ' > "$RAW"
 
   [[ -s "$RAW" ]] || { echo "[union] no sequences after filter"; exit 3; }
   echo "[union] $(grep -c '^>' "$RAW") seq -> $RAW"
@@ -88,49 +87,56 @@ CENTROID_FA="$(ls -1 "$SOUT"/plasmids_raw_*"${ID}"-"${COV}".fna 2>/dev/null | he
 if [[ -n "${CENTROID_FA:-}" && -s "$CENTROID_FA" ]]; then
   cp -f "$CENTROID_FA" "$REP_OUT"
 else
-  TMP_IDS="$SOUT/rep.ids"
-  awk '
-    BEGIN{picked=0}
-    /^[[:space:]]*$/ {next}
-    /^#/ {next}
-    /^[>]*[Cc]luster[[:space:]]*[0-9]+/ {picked=0; next}
-    { if(!picked){ id=$1; sub(/^[>]/,"",id); print id; picked=1 } }
-  ' "$SOUT/clusters.txt" > "$TMP_IDS"
-
-  awk 'BEGIN{
-         while((getline k<ARGV[1])>0){want[k]=1}
-         close(ARGV[1]); ARGV[1]=""
-       }
-       /^>/{
-         id=substr($0,2); sub(/[ \t].*$/,"",id)
-         keep=(id in want)
-       }
-       { if(keep) print }
-  ' "$TMP_IDS" "$LRAW" > "$REP_OUT"
+  # Optimized: combine the two AWK passes into one by doing extraction and filtering in a single pass
+  awk -v lraw="$LRAW" '
+    # First pass: extract rep IDs from clusters.txt
+    FILENAME==ARGV[1] {
+      if (/^[[:space:]]*$/ || /^#/) next
+      if (/^[>]*[Cc]luster[[:space:]]*[0-9]+/) {picked=0; next}
+      if (!picked) {
+        id=$1; sub(/^[>]/,"",id)
+        want[id]=1
+        picked=1
+      }
+      next
+    }
+    # Second pass: filter sequences from LRAW
+    /^>/ {
+      id=substr($0,2); sub(/[ \t].*$/,"",id)
+      keep=(id in want)
+    }
+    { if(keep) print }
+  ' "$SOUT/clusters.txt" "$LRAW" > "$REP_OUT"
 fi
 [[ -s "$REP_OUT" ]] || { echo "[err] no representatives"; exit 5; }
 echo "[sample-derep] $(grep -c '^>' "$REP_OUT") reps -> $REP_OUT"
 
-# 3) Update global concat (header-dedup)
-tmp="$GOUT/.tmp.append.$$.fa"; : > "$tmp"
-awk '
-  /^>/ {h=$0; if(!(h in seen)){seen[h]=1; keep=1; print; next} keep=0}
-  { if(keep) print }
-' "$REP_OUT" > "$tmp"
-
+# 3) Update global concat (header-dedup) - optimized to avoid intermediate temp file
 if [[ -s "$GCONCAT" ]]; then
-  cat "$GCONCAT" "$tmp" | awk '
+  # Combine dedup and merge in one step
+  awk '
+    # First pass: read existing global concat and mark seen headers
+    FILENAME==ARGV[1] {
+      if (/^>/) {seen[$0]=1; keep=1; print; next}
+      if (keep) print
+      next
+    }
+    # Second pass: add new sequences that haven't been seen
     /^>/ {h=$0; if(!(h in seen)){seen[h]=1; keep=1; print; next} keep=0}
     { if(keep) print }
-  ' > "$GOUT/.new.concat"
+  ' "$GCONCAT" "$REP_OUT" > "$GOUT/.new.concat"
   mv -f "$GOUT/.new.concat" "$GCONCAT"
 else
-  mv -f "$tmp" "$GCONCAT"
+  # First time - just dedup the representative sequences
+  awk '
+    /^>/ {h=$0; if(!(h in seen)){seen[h]=1; keep=1; print; next} keep=0}
+    { if(keep) print }
+  ' "$REP_OUT" > "$GCONCAT"
 fi
-rm -f "$tmp"
 
-echo "$SAMPLE" >> "$GOUT/samples.list"
-awk '!seen[$0]++' "$GOUT/samples.list" > "$GOUT/.new.samples" && mv -f "$GOUT/.new.samples" "$GOUT/samples.list"
+# Optimize sample list update - append and dedup in single operation
+{ echo "$SAMPLE"; [[ -f "$GOUT/samples.list" ]] && cat "$GOUT/samples.list"; } | \
+  awk '!seen[$0]++' > "$GOUT/.new.samples" && mv -f "$GOUT/.new.samples" "$GOUT/samples.list"
 echo "[global] appended $SAMPLE reps to $GCONCAT"
 
 # 4) Trigger global clustering so one run suffices

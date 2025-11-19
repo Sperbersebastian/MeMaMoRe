@@ -50,8 +50,11 @@ source "$ROOT/bin/lib/env.sh"
 merge(){ # $1 out_yaml, $2 module-defaults-yaml
   ensure_env_by_module "sra_tools"
   local setflags=(); for s in "${SETS[@]}"; do setflags+=(--set "$s"); done
+  local m; m="$(mktemp)" || { echo "[err] failed to create temp file"; exit 2; }
+  trap 'rm -f "$m"' RETURN
+  cat "$2" > "$m"
   run_in_env "env_sra_tools" python "$ROOT/scripts/merge_params.py" \
-    --module-defaults "$2" --defaults "$ROOT/config/defaults.yaml" --local "$ROOT/config/local.yaml" \
+    --module-defaults "$m" --defaults "$ROOT/config/defaults.yaml" --local "$ROOT/config/local.yaml" \
     "${setflags[@]}" --out "$1"
 }
 

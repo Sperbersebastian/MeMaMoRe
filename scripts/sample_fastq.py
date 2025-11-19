@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 import argparse, gzip, random, sys, os
-def open_auto(p, m): return gzip.open(p,m) if p.endswith(".gz") else open(p,m)
+def open_auto(p, m): 
+    # Use larger buffer size for better I/O performance
+    bufsize = 1024 * 1024  # 1MB buffer
+    if p.endswith(".gz"):
+        return gzip.open(p, m, compresslevel=6)
+    return open(p, m, buffering=bufsize)
+
 def it(f):
     while True:
         h=f.readline()
@@ -8,7 +14,14 @@ def it(f):
         s=f.readline(); p=f.readline(); q=f.readline()
         if not q: return
         yield h,s,p,q
-def wr(o, r): o.write(r[0]); o.write(r[1]); o.write(r[2]); o.write(r[3])
+
+def wr(o, r): 
+    # Write all four lines at once to reduce I/O calls
+    o.write(r[0])
+    o.write(r[1])
+    o.write(r[2])
+    o.write(r[3])
+
 def single(i1,o1,prop,seed):
     random.seed(seed); t=k=0
     with open_auto(i1,"rb") as f1, open_auto(o1,"wb") as o:
@@ -16,6 +29,7 @@ def single(i1,o1,prop,seed):
             t+=1
             if random.random()<prop: k+=1; wr(o,r)
     print(f"[single] kept {k}/{t} ({(k/max(1,t)):.2%})", file=sys.stderr)
+
 def paired(i1,i2,o1,o2,prop,seed):
     random.seed(seed); t=k=0
     with open_auto(i1,"rb") as f1, open_auto(i2,"rb") as f2, open_auto(o1,"wb") as o1h, open_auto(o2,"wb") as o2h:

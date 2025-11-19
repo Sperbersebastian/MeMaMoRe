@@ -47,15 +47,21 @@ REQ_PKGS=(metabat2 snakemake yq checkm2 gtdbtk barrnap tRNAscan-SE samtools)
 
 env_exists() { "$MM" env list | awk '{print $1}' | grep -qx "$ENV_MAIN"; }
 have_in_env(){ "$MM" run -n "$ENV_MAIN" bash -lc "command -v '$1' >/dev/null"; }
-pkg_bin(){ case "$1" in metabat2) echo jgi_summarize_bam_contig_depths;; tRNAscan-SE) echo tRNAscan-SE;; *) echo "$1";; esac; }
+# Cache for package binary mappings to avoid repeated case statements
+declare -A PKG_BIN_MAP=([metabat2]="jgi_summarize_bam_contig_depths" [tRNAscan-SE]="tRNAscan-SE")
+pkg_bin(){ echo "${PKG_BIN_MAP[$1]:-$1}"; }
 
 ensure_env(){
   if ! env_exists; then
     echo "[bootstrap] creating $ENV_MAIN"
     "$MM" create -y -n "$ENV_MAIN" -c conda-forge -c bioconda "${REQ_PKGS[@]}"
   else
-    missing=(); for p in "${REQ_PKGS[@]}"; do b="$(pkg_bin "$p")"; have_in_env "$b" || missing+=("$p"); done
-    ((${#missing[@]})) && "$MM" install -y -n "$ENV_MAIN" -c conda-forge -c bioconda "${missing[@]}"
+    missing=()
+    for p in "${REQ_PKGS[@]}"; do 
+      b="$(pkg_bin "$p")"
+      have_in_env "$b" || missing+=("$p")
+    done
+    (( ${#missing[@]} )) && "$MM" install -y -n "$ENV_MAIN" -c conda-forge -c bioconda "${missing[@]}"
   fi
 }
 ensure_env

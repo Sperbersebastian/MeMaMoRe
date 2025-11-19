@@ -26,7 +26,8 @@ def parse_set(items):
 
 def load_yaml(p): 
     if not p or not os.path.isfile(p): return {}
-    with open(p) as f: return yaml.safe_load(f) or {}
+    with open(p, 'r') as f: 
+        return yaml.safe_load(f) or {}
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser()
@@ -49,4 +50,8 @@ if __name__=="__main__":
         print(json.dumps(cur) if isinstance(cur,(dict,list)) else cur); sys.exit(0)
 
     s=yaml.safe_dump(merged, sort_keys=False)
-    open(a.out,"w").write(s) if a.out else print(s)
+    if a.out:
+        with open(a.out, "w") as f:
+            f.write(s)
+    else:
+        print(s)

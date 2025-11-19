@@ -72,6 +72,9 @@ _env_for(){
   esac
 }
 
+# Cache for environment and binary checks to avoid repeated lookups
+declare -A _ENV_CACHE _BIN_CACHE
+
 _run_step(){
   local step="$1" exec_path="$2" sample="$3" ; shift 3
   local OUT="$ROOT/SRA/plasmids/$sample"; mkdir -p "$OUT/.done"
@@ -80,9 +83,22 @@ _run_step(){
   if [[ -s "$done" && "$FORCE" != "1" ]]; then
     echo "[skip] $sample :: $step (done)"; return 0
   fi
-  ensure_env_by_module "$step"
-  local env_name; env_name="$(_env_for "$step")"
-  local need; need="$(_need_bin "$step")"
+  
+  # Use cached environment name or compute and cache it
+  local env_name="${_ENV_CACHE[$step]:-}"
+  if [[ -z "$env_name" ]]; then
+    ensure_env_by_module "$step"
+    env_name="$(_env_for "$step")"
+    _ENV_CACHE[$step]="$env_name"
+  fi
+  
+  # Use cached binary check or compute and cache it
+  local need="${_BIN_CACHE[$step]:-NOT_SET}"
+  if [[ "$need" == "NOT_SET" ]]; then
+    need="$(_need_bin "$step")"
+    _BIN_CACHE[$step]="$need"
+  fi
+  
   if [[ -n "$need" ]]; then
     run_in_env "$env_name" bash -lc "command -v $need >/dev/null" \
       || { echo "[error] '$need' missing in env '$env_name' (step $step)"; exit 127; }
@@ -112,24 +128,26 @@ _global_cluster(){
 
   [[ -s "$OUT/global.clusters.txt" ]] || { echo "[global_cluster] empty clusters"; exit 3; }
 
-  awk '
-    BEGIN{picked=0}
-    /^[[:space:]]*$/ {next}
-    /^#/ {next}
-    /^[>]*[[:space:]]*[Cc]luster[[:space:]]*[0-9]+/ {picked=0; next}
-    { if(!picked){ id=$1; sub(/^[>]/,"",id); print id; picked=1 } }
-  ' "$OUT/global.clusters.txt" > "$OUT/global.rep.ids"
-
-  awk 'BEGIN{
-         while((getline k<ARGV[1])>0){want[k]=1}
-         close(ARGV[1]); ARGV[1]=""
-       }
-       /^>/{
-         id=substr($0,2); sub(/[ \t].*$/,"",id)
-         keep = (id in want)
-       }
-       { if(keep) print }
-  ' "$OUT/global.rep.ids" "$IN" > "$OUT/plasmids_derep.global.fasta"
+  # Optimized: combine extraction and filtering into a single AWK pass
+  awk -v infile="$IN" '
+    # First pass: extract rep IDs from clusters.txt
+    FILENAME==ARGV[1] {
+      if (/^[[:space:]]*$/ || /^#/) next
+      if (/^[>]*[[:space:]]*[Cc]luster[[:space:]]*[0-9]+/) {picked=0; next}
+      if (!picked) {
+        id=$1; sub(/^[>]/,"",id)
+        want[id]=1
+        picked=1
+      }
+      next
+    }
+    # Second pass: filter sequences from input FASTA
+    /^>/ {
+      id=substr($0,2); sub(/[ \t].*$/,"",id)
+      keep=(id in want)
+    }
+    { if(keep) print }
+  ' "$OUT/global.clusters.txt" "$IN" > "$OUT/plasmids_derep.global.fasta"
 
   local NALL; NALL=$(grep -c '^>' "$IN" || true)
   local NUNQ; NUNQ=$(grep -c '^>' "$OUT/plasmids_derep.global.fasta" || true)
