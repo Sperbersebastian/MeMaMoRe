@@ -44,7 +44,9 @@ if __name__=="__main__":
     ap.add_argument("-p","--proportion", type=float, default=0.10)
     ap.add_argument("-s","--seed", type=int, default=42)
     a=ap.parse_args()
-    os.makedirs(os.path.dirname(a.out1), exist_ok=True)
+    out1_dir = os.path.dirname(a.out1)
+    if out1_dir:
+        os.makedirs(out1_dir, exist_ok=True)
     if a.in2:
         if not a.out2: ap.error("When --in2 is provided, --out2 is required.")
         paired(a.in1,a.in2,a.out1,a.out2,a.proportion,a.seed)
