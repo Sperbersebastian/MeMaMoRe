@@ -1,343 +1,290 @@
-````markdown
-# MeMaMoRe – Metagenomic Modular Research Pipeline
+# **MeMaMoRe: Metagenomic MAG/Mobilome/Resistome Reconstruction**
 
-This project provides a **modular pipeline** for metagenomic analyses.  
-Each module is isolated, runs inside its own Micromamba environment, and can be combined or executed individually.
-
----
-
-## Installation
-
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/Sperbersebastian/MeMaMoRe.git
-   cd MeMaMoRe
-````
-
-2. Ensure [micromamba](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) is installed and on your `PATH`.
-
-3. Create the environment for the **ingest** module (other modules will add their own envs):
-
-   ```bash
-   micromamba create -y -n env_sra_tools -c conda-forge -c bioconda python=3.10 pyyaml
-   ```
+**Version:** 0.9-dev
+**Author:** Sebastian Sperber
+**Institution:** University of Potsdam & Leibniz Institute for Agricultural Engineering and Bioeconomy (ATB)
+**License:** MIT
+**Repository:** [github.com/Sperbersebastian/MeMaMoRe](https://github.com/Sperbersebastian/MeMaMoRe)
+**Contact:** [se.sperber@gmail.com](mailto:se.sperber@gmail.com)
 
 ---
 
-## Usage
+## **Overview**
 
-All execution is routed through the **main driver**:
+**MeMaMoRe** is a modular and reproducible framework for the reconstruction and characterization of **metagenome-assembled genomes (MAGs)**, **plasmids**, and **viruses** from shotgun metagenomic data.
+It provides a complete, tool-integrated analysis chain with high flexibility and modular environment control.
+The pipeline supports **local execution** and **HPC clusters**, using **Micromamba** for isolated environment management.
+
+Core components include:
+
+* **Quality Control and Trimming**
+* **Assembly**
+* **Binning and Refinement**
+* **MAG Quality and Taxonomy**
+* **Plasmid and Virus Detection**
+* **ARG and Virulence Profiling**
+* **(optional)** Simulation for test and benchmarking datasets
+
+---
+
+## **Key Features**
+
+| Module           | Description                                          | Tools                                                                          |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **QC**           | Read quality trimming and report generation          | Fastp, FastQC, MultiQC                                                         |
+| **Assembly**     | Metagenomic and plasmid-targeted assembly            | metaSPAdes, metaPlasmidSPAdes                                                  |
+| **Binning**      | Genome binning and refinement                        | MetaBAT2, Binny, COMEBin, MAGScoT, CheckM2                                     |
+| **Taxonomy**     | Genome classification via GTDB                       | GTDB-Tk (r226)                                                                 |
+| **Plasmids**     | Detection, clustering, and host prediction           | PLASMe, MOB-suite, geNomad (✓ core), ViralVerify (✓ core), HOTSPOT (⚠ partial) |
+| **Viruses** ⚠    | Viral prediction and QC *(not implemented yet)*      | geNomad, VirSorter2, VIBRANT, CheckV, iPHoP                                    |
+| **Functional** ⚠ | ARG and virulence detection *(not implemented yet)*  | DeepARG, VFDB, CARD                                                            |
+| **Simulation** ⚠ | Synthetic reads and controlled variation *(partial)* | ART, custom `sim_env`                                                          |
+
+---
+
+## **Directory Structure**
+
+```
+MeMaMoRe/
+├── bin/
+│   ├── main.sh              # Main CLI entry
+│   ├── lib/                 # Shared helper functions (env mgmt, logging)
+│   └── modules/
+│       ├── ingest.sh        # Sample import / metadata management
+│       ├── qc.sh            # Quality control orchestrator
+│       ├── assembly.sh      # Assembly orchestrator
+│       ├── binning.sh       # Binning/refinement orchestrator
+│       ├── plasmids.sh      # Plasmid workflow orchestrator
+│       ├── viruses.sh       # ⚠ placeholder for viral analysis
+│       ├── functional.sh    # ⚠ placeholder for ARG/virulence annotation
+│       └── sim.sh           # Simulation orchestrator
+├── envs/                    # Micromamba environment creation scripts
+│   ├── create_env_plasmids.sh
+│   ├── create_env_binning.sh
+│   ├── create_env_qc.sh
+│   └── ...
+├── external/                # External cloned tools (e.g. Binny, COMEBin, HOTSPOT)
+├── modules/                 # Tool-specific executors (assembly, plasmids, binning)
+├── refdata/                 # Databases (GTDB, PLASMe, geNomad, HOTSPOT, etc.)
+├── SRA/                     # Main workspace for input/output per sample
+│   ├── reads/
+│   ├── assemblies/
+│   ├── binning/
+│   ├── plasmids/
+│   ├── viruses/
+│   ├── functional/
+│   └── qc/
+└── config/                  # YAML configurations (params, testsets)
+```
+
+⚠ Modules **viruses**, **functional**, and **simulation** are placeholders or partially implemented.
+
+---
+
+## **Installation**
+
+### 1. Prerequisites
+
+* Linux (tested on Ubuntu 22.04 and CentOS 7)
+* Micromamba or Conda
+* Git ≥ 2.30
+* Bash ≥ 5.0
+
+### 2. Clone the Repository
 
 ```bash
-bin/main.sh <command> <module> [options]
+git clone https://github.com/Sperbersebastian/MeMaMoRe.git
+cd MeMaMoRe
 ```
 
-### Commands
-
-* `run` – execute a given module
-* `help` – print usage info
-
-### Ingest module (FASTQ)
-
-Prepare raw FASTQs (from SRA download or local files) and optional 10% testsets:
+### 3. Create Environments
 
 ```bash
-bin/main.sh run ingest --fastq config/fastq_manifest.tsv
+bin/main.sh env create plasmids --force
 ```
 
-* Input: `config/fastq_manifest.tsv`
-  Example structure:
+Installs:
 
-  ```
-  sample_id    country    management    R1    R2
-  testA        ISR        Conv          /path/to/testA_1.fastq.gz   /path/to/testA_2.fastq.gz
-  testB        USA        Org           /path/to/testB_1.fastq.gz   /path/to/testB_2.fastq.gz
-  ```
+* `plasmids_core`
+* `plasme_env`
+* `mobsuite_env`
+* `hotspot_env`
+* `genomad_env`
+* `viralverify_env`
 
-  * `R2` may be left empty for single-end samples.
-  * If the manifest is malformed, the pipeline will fail early. Ensure all columns exist.
+⚠ `bin/main.sh env create all` not yet implemented.
 
-* Output:
+---
 
-  * Raw FASTQs → `SRA/raw_fastq/<sample>/`
-  * Testset FASTQs (10% downsampled) → `SRA/testsets/<sample>/`
-  * Sample table → `config/samples.tsv`
-  * Event log → `api/status.jsonl`
+## **Usage**
 
-### Status + Logs
-
-Check recent module progress:
+### General Syntax
 
 ```bash
-tail -n 10 api/status.jsonl | jq .
+bin/main.sh run <module> --sample <SAMPLE> [--force] [--force-env]
 ```
 
-Inspect logs:
+### Examples
+
+**Run quality control:**
 
 ```bash
-ls logs/
+bin/main.sh run qc --sample test_sample
 ```
 
----
-
-## Roadmap (Modules)
-
-* [x] **ingest/fastq** – normalize input & testsets
-* [ ] **qc** – fastp → fastqc → multiqc
-* [ ] **assembly** – metaSPAdes
-* [ ] **binning** – COMEBin, Binny, MetaBAT2
-* [ ] **refinement** – MAGScoT
-* [ ] **taxonomy** – GTDB-Tk, BBTools
-* [ ] **plasmid detection** – geNomad, PlasMe, MOB-suite
-* [ ] **virus detection** – VirSorter2, VIBRANT, CheckV
-* [ ] **ARGs/virulence** – DeepARG, RGI, VFDB
-* [ ] **diversity + stats** – R-based analyses
-* [ ] **GUI layer (later)**
-
----
-
-## Contributing
-
-* Keep each module self-contained (`modules/<name>/<tool>/exec.sh`)
-* Environments are **tool-specific** (`env_<tool>`)
-* Always log to `logs/` and events to `api/status.jsonl`
-
----
-
-
-```markdown
-# 🍏 MeMaMoRe: Metagenomic Analysis of Mobile Genetic Elements in Apple Orchards
-
-This repository contains a reproducible pipeline for analyzing metagenomic shotgun data from conventional and organic apple orchards.  
-The pipeline identifies and characterizes **contigs, MAGs, plasmids, viruses, and ARGs**.
-
----
-
-## 📂 Project Structure
-
-```
-
-bin/                # Main entry scripts
-configs/            # Config files
-modules/            # Individual pipeline modules
-SRA/                # Output data (assemblies, bins, QC, etc.)
-logs/               # Runtime logs
-
-````
-
----
-
-## 🔧 Dependencies
-
-All software is installed in isolated **micromamba environments**.  
-Each module automatically activates the correct environment when run.
-
-Main tools:
-
-- **Fastp, FastQC, MultiQC** → read QC  
-- **SPAdes/metaSPAdes** → assembly  
-- **BWA-MEM2** → mapping  
-- **samtools** → BAM handling  
-- **CoverM** → coverage statistics  
-- **CheckM2, GUNC** → MAG QC  
-- **geNomad, PlasMe, MOB-suite** → plasmid detection  
-- **VirSorter2, VIBRANT, CheckV** → virus detection  
-- **DeepARG, VFDB, RGI** → resistance/virulence factors  
-
----
-
-## 🏃 Usage
-
-Run modules via the main entry script:
+**Run assembly:**
 
 ```bash
-bin/main.sh run <module> [--sample SAMPLE] [--test] [--force]
-````
-
-Options:
-
-* `--test` → runs in quick test mode (subset of reads, reduced runtime)
-* `--force` → overwrites existing outputs
-
----
-
-## A. Quality Control
-
-Raw reads are trimmed and quality-checked:
-
-* **fastp** → adapter removal, trimming, filtering
-* **FastQC** → per-sample QC
-* **MultiQC** → combined summary
-
-Outputs under:
-
-```
-SRA/fastp/
-  ├── *_trimmed.fastq.gz
-  └── fastqc_results/
+bin/main.sh run assembly --sample test_sample
 ```
 
----
-
-## B. Assembly (SPAdes)
-
-Reads are assembled with **SPAdes/metaSPAdes** into contigs.
-
-Outputs under:
-
-```
-SRA/assemblies/spades/<sample>/
-  ├── contigs.fasta
-  ├── contigs.len1000.fasta      # contigs ≥ 1000 bp
-  ├── logs/
-  └── map/                       # BAMs + coverage stats
-```
-
----
-
-## C. Assembly QC (contig\_qc)
-
-After assembly, contigs are filtered based on mapping support.
-
-### 🚀 Run
+**Run plasmid analysis:**
 
 ```bash
-# Test run (subset of reads)
-bin/main.sh run assembly --test --sample SAMPLE_NAME --force
-
-# Full run
-bin/main.sh run assembly --sample SAMPLE_NAME --force
+bin/main.sh run plasmids --sample test_sample
 ```
 
-### 📂 Outputs
+**Global plasmid dereplication:**
 
-Results for each sample:
-
-```
-SRA/assemblies/
-├── spades/<sample>/            # raw assembly + mapping
-│   ├── contigs.len1000.fasta
-│   └── map/sample.sorted.bam
-│
-└── contig_qc/<sample>/         # QC outputs
-    ├── contigs_kept.tsv         # kept contigs
-    ├── contigs_dropped.tsv      # dropped contigs + reason
-    ├── contigs.filtered.fasta   # FASTA with kept contigs
-    └── mapping_counts.tsv       # read support summary
+```bash
+bin/main.sh run plasmids --global-cluster
 ```
 
-### 📊 Filtering rules
+**Run binning workflow:**
 
-* **Breadth ≥ 0.8** → ≥80% of bases covered
-* **Mean depth ≥ 2** → average coverage ≥ 2×
-
-Contigs failing these are dropped with reason (`depth`, `breadth`).
-
-### 🧮 Mapping Counts (`mapping_counts.tsv`)
-
-| sample | total\_primary | mapped\_unfiltered | mapped\_filtered | prop\_unfiltered | prop\_filtered |
-| ------ | -------------- | ------------------ | ---------------- | ---------------- | -------------- |
-| testA  | 4,228,836      | 3,181,216          | 3,180,648        | 0.752268         | 0.752133       |
-
-* **total\_primary** → all primary reads in BAM (excl. secondary/supplementary)
-* **mapped\_unfiltered** → reads mapped to all contigs
-* **mapped\_filtered** → reads mapped to QC-kept contigs only
-* **prop**\* → fraction of mapped reads
+```bash
+bin/main.sh run binning --sample test_sample
+```
 
 ---
 
-## D. Binning
+## **Environment Management**
 
-(coming soon — COMEBin, Binny, MetaBAT2 → MAGs, refinement with MAGScoT, QC with CheckM2, GUNC)
+Each environment is created by its own script under `/envs/`, for example:
 
----
+```bash
+bash envs/create_env_plasmids.sh
+```
 
-## E. Plasmid Detection
+Scripts handle:
 
-(coming soon — geNomad, PlasMe, MOB-suite, viralverify+genomad merge)
-
----
-
-## F. Virus Detection
-
-(coming soon — VirSorter2, VIBRANT, CheckV, deepPHAGE)
+* Micromamba activation
+* Version-pinned installation
+* Optional DB download (e.g. HOTSPOT, geNomad)
 
 ---
 
-## G. Functional Annotation
+## **Database Overview**
 
-(coming soon — DeepARG, VFDB, RGI, CARD integration)
+| Database                  | Path                         | Purpose                     | Status                |
+| ------------------------- | ---------------------------- | --------------------------- | --------------------- |
+| **GTDB-Tk r226**          | `refdata/gtdbtk/release226/` | MAG taxonomy                | ✓                     |
+| **PLASMe DB**             | `refdata/plasme/DB/`         | Plasmid detection           | ✓                     |
+| **geNomad DB**            | `refdata/genomad/`           | Virus/plasmid detection     | ✓                     |
+| **ViralVerify DB**        | `refdata/viralverify/`       | Auxiliary plasmid data      | ✓                     |
+| **HOTSPOT DB**            | `refdata/HOTSPOT/database/`  | Plasmid host prediction     | ⚠ partial             |
+| **CARD / DeepARG / VFDB** | `refdata/functional/`        | ARG and virulence databases | ⚠ pending integration |
 
 ---
 
-## 📝 Notes
+## **Output Example**
 
-* All modules log to `logs/`
-* Test mode (`--test`) is recommended for pipeline debugging
-* Full runs are compute-intensive; use SLURM or HPC batch jobs
+```
+SRA/
+└── test_sample/
+    ├── qc/
+    ├── assemblies/spades/contigs.fasta
+    ├── binning/comebin/
+    ├── plasmids/plasme_hp/
+    ├── plasmids/mobsuite/
+    ├── viruses/genomad/        # ⚠ placeholder
+    └── functional/deeparg/     # ⚠ placeholder
+```
+
+Each module writes outputs in its own subfolder with `.done` markers to support resumable execution.
 
 ---
-D. Binning (MAG recovery)
 
-Input:
-Filtered contigs from C. contig_qc.
+## **Testing (Synthetic Data)**
 
-Steps:
+Quick test run using internal mini dataset:
 
-Initial binning
-Run three independent binners in parallel:
+```bash
+bin/main.sh run sim --set miniset
+bin/main.sh run plasmids --sample miniset
+```
 
-COMEBin (SRA/binning/comebin/<sample>/)
+⚠ Simulation module partially implemented.
 
-Binny (SRA/binning/binny/<sample>/)
+---
 
-MetaBAT2 (SRA/binning/metabat2/<sample>/)
+## **Development Notes**
 
-Each produces draft bins as FASTA files.
+* Strict Bash safety (`set -euo pipefail`)
+* Modular orchestration by module
+* Automatic environment setup
+* CUDA support where available
+* ⚠ Not yet available:
 
-Bin refinement (MAGScoT)
+  * Virus and functional modules
+  * Multi-sample summary
+  * Combined “env create all”
 
-Combine outputs of the three binners.
+---
 
-Run MAGScoT to merge, dereplicate, and refine.
+## **Tool References**
 
-Output: SRA/binning/magscot/<sample>/bins/ (final MAG FASTAs).
+A complete reference checklist for all tools used in MeMaMoRe is provided for citation in the *Methods → References* section.
 
-Quality control
-Each MAG is evaluated with:
+### **Read Quality Control**
 
-CheckM2 → genome completeness & contamination.
+* Andrews S. 2010. *FastQC*.
+* Ewels P *et al.* 2016. *MultiQC.* *Bioinformatics* 32(19):3047. doi:10.1093/bioinformatics/btw354.
+* Chen S *et al.* 2018. *fastp.* *Bioinformatics* 34(17):i884–i890. doi:10.1093/bioinformatics/bty560.
 
-barnap → rRNA detection.
+### **Assembly**
 
-tRNAscan-SE → tRNA detection.
+* Prjibelski A *et al.* 2020. *SPAdes.* *Curr Protoc Bioinformatics* 70:e102.
+* Nurk S *et al.* 2017. *metaSPAdes.* *Genome Res.* 27(5):824–834.
+* Antipov D *et al.* 2019. *metaPlasmidSPAdes.* *Genome Res.* 29(6):961–968.
+* Antipov D *et al.* 2020. *ViralVerify.* *Bioinformatics* 36(14):4126–4129.
 
-Recommended filters:
+### **Binning and Refinement**
 
-High-quality MAGs: ≥90% completeness, ≤5% contamination, ≥18 tRNAs, rRNA detected.
+* Kang DD *et al.* 2019. *MetaBAT2.* *PeerJ* 7:e7359.
+* Hickl O *et al.* 2022. *Binny.* *Brief Bioinform.* 23(6):bbac431.
+* Wang Z *et al.* 2024. *COMEBin.* *Nat Commun* 15:585.
+* Rühlemann M *et al.* 2022. *MAGScoT.* *Bioinformatics* 38(24):5430–5433.
 
-Medium-quality MAGs: ≥50% completeness, ≤10% contamination.
+### **MAG Quality and Taxonomy**
 
-All others discarded.
+* Chklovski A *et al.* 2023. *CheckM2.* *Nat Methods* 20:1203–1212.
+* Chaumeil P-A *et al.* 2022. *GTDB-Tk.* *Bioinformatics.*
+* Parks DH *et al.* 2021. *GTDB.* *Nucleic Acids Res.* 50:D785–D794.
+* Bushnell B. 2014. *BBTools.* LBNL.
 
-Taxonomy assignment
+### **Plasmid Detection and Host Prediction**
 
-Run GTDB-Tk on refined, QC-passed MAGs.
+* Tang K *et al.* 2023. *PLASMe.* *Nucleic Acids Res.* 51(15):e83.
+* Robertson J, Nash JHE. 2018. *MOB-suite.* *Microb Genom* 4(8):e000206.
+* Camargo AP *et al.* 2024. *geNomad.* *Nat Biotechnol* 42:1303–1312.
+* Ji W *et al.* 2023. *HOTSPOT.* *Bioinformatics* 39(5):btad283.
 
-Output taxonomy tables + annotated MAG FASTAs: SRA/binning/gtdbtk/<sample>/.
+### **Viral Analysis (Planned)**
 
-Outputs per sample:
+* Guo J *et al.* 2021. *VirSorter2.* *Microbiome* 9:37.
+* Kieft K *et al.* 2020. *VIBRANT.* *Microbiome* 8:90.
+* Nayfach S *et al.* 2021. *CheckV.* *Nat Biotechnol* 39:578–585.
+* Roux S *et al.* 2023. *iPHoP.* *PLOS Biol.* 21(4):e3002083.
 
-binning/comebin/ → raw COMEBin bins
+### **Functional Annotation (Planned)**
 
-binning/binny/ → raw Binny bins
+* Arango-Argoty G *et al.* 2018. *DeepARG.* *Microbiome* 6:23.
+* Alcock BP *et al.* 2023. *CARD.* *Nucleic Acids Res.* 51(D1):D690–D699.
 
-binning/metabat2/ → raw MetaBAT2 bins
+---
 
-binning/magscot/ → refined MAGs
+## **Citation**
 
-binning/checkm2/ → QC metrics
-
-binning/barnap/ + binning/trnascan/ → rRNA/tRNA results
-
-binning/gtdbtk/ → taxonomy assignment
+> Sperber, S. (2025). *MeMaMoRe: A modular pipeline for metagenomic MAG, plasmid, and virus reconstruction.*
+> University of Potsdam / ATB Potsdam.
