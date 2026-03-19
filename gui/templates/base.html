@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeMaMoRe – {% block title %}Dashboard{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script>
+    // Apply saved theme before paint to avoid flash
+    (function() {
+      const t = localStorage.getItem('memamore-theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="icon">🧬</span>
+      <span>MeMaMoRe</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/" class="{% if page == 'dashboard' %}active{% endif %}">
+        <span class="nav-icon">📊</span> Dashboard
+      </a>
+      <a href="/samples" class="{% if page == 'samples' %}active{% endif %}">
+        <span class="nav-icon">📁</span> Samples
+      </a>
+      <a href="/run" class="{% if page == 'run' %}active{% endif %}">
+        <span class="nav-icon">▶️</span> Run Pipeline
+      </a>
+      <a href="/results" class="{% if page == 'results' %}active{% endif %}">
+        <span class="nav-icon">📈</span> Results
+      </a>
+      <a href="/logs" class="{% if page == 'logs' %}active{% endif %}">
+        <span class="nav-icon">🖥️</span> Logs
+      </a>
+    </nav>
+    <button class="theme-toggle" onclick="toggleTheme()">
+      <span class="toggle-icon" id="theme-icon">🌙</span>
+      <span id="theme-label">Dark</span>
+    </button>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h1>{% block heading %}Dashboard{% endblock %}</h1>
+      <div id="topbar-status" class="topbar-badge idle">
+        <span>●</span> <span id="jobs-count">Idle</span>
+      </div>
+    </header>
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script>
+    function showToast(msg, type='success') {
+      const c = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = 'toast ' + type;
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+    function updateJobsBadge() {
+      fetch('/api/jobs').then(r=>r.json()).then(jobs => {
+        const running = jobs.filter(j => j.running);
+        const el = document.getElementById('jobs-count');
+        const badge = document.getElementById('topbar-status');
+        if (running.length > 0) {
+          el.textContent = running.length + ' job(s) running';
+          badge.className = 'topbar-badge running';
+        } else {
+          el.textContent = 'Idle';
+          badge.className = 'topbar-badge idle';
+        }
+      }).catch(()=>{});
+    }
+    setInterval(updateJobsBadge, 5000);
+    updateJobsBadge();
+
+    // Theme toggle
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'light' ? 'dark' : 'light';
+      if (next === 'dark') {
+        html.removeAttribute('data-theme');
+      } else {
+        html.setAttribute('data-theme', next);
+      }
+      localStorage.setItem('memamore-theme', next === 'dark' ? '' : next);
+      updateThemeButton();
+    }
+    function updateThemeButton() {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      document.getElementById('theme-icon').textContent = isLight ? '☀️' : '🌙';
+      document.getElementById('theme-label').textContent = isLight ? 'Light' : 'Dark';
+    }
+    updateThemeButton();
+
+    // Confirm dialog helper
+    function showConfirm(title, message, onConfirm) {
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = `
+        <div class="confirm-dialog">
+          <h3>${title}</h3>
+          <p>${message}</p>
+          <div class="dialog-actions">
+            <button class="btn btn-secondary" onclick="this.closest('.confirm-overlay').remove()">Cancel</button>
+            <button class="btn btn-danger" id="confirm-yes">Delete</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector('#confirm-yes').onclick = () => { overlay.remove(); onConfirm(); };
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    }
+
+    // Utility: format bytes
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    // Utility: format large numbers
+    function fmtNum(n) {
+      return Number(n).toLocaleString();
+    }
+
+    // Utility: render bar chart
+    function renderBarChart(title, data, maxItems=10) {
+      // data: [{label, value}]
+      if (!data || data.length === 0) return '';
+      const sorted = data.slice().sort((a,b) => b.value - a.value).slice(0, maxItems);
+      const max = sorted[0].value || 1;
+      return `<div class="chart-container">
+        <h4>${title}</h4>
+        <div class="chart-bars">
+          ${sorted.map((d, i) => `<div class="chart-row">
+            <div class="chart-label" title="${d.label}">${d.label}</div>
+            <div class="chart-bar-track"><div class="chart-bar-fill bar-color-${i % 8}" style="width:${(d.value/max*100).toFixed(1)}%"></div></div>
+            <div class="chart-bar-value">${fmtNum(d.value)}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Generic CSV export
+    function exportTableCSV(rows, filename) {
+      if (!rows || !rows.length) return;
+      const headers = Object.keys(rows[0]);
+      const csv = [headers.join(','), ...rows.map(r => headers.map(h => `"${(r[h]||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+    }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

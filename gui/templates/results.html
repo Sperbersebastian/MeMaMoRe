@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% set page = "results" %}
+{% block title %}Results{% endblock %}
+{% block heading %}Results{% endblock %}
+
+{% block content %}
+<div class="form-row" style="margin-bottom:16px">
+  <div class="form-group" style="min-width:250px">
+    <label>Sample</label>
+    <select id="sample-select" onchange="loadResults()"><option value="">Loading...</option></select>
+  </div>
+</div>
+
+<div class="tabs" id="module-tabs">
+  <div class="tab" data-module="qc" onclick="switchModule('qc', this)">QC</div>
+  <div class="tab" data-module="assembly" onclick="switchModule('assembly', this)">Assembly</div>
+  <div class="tab active" data-module="args" onclick="switchModule('args', this)">ARGs</div>
+  <div class="tab" data-module="viruses" onclick="switchModule('viruses', this)">Viruses</div>
+  <div class="tab" data-module="plasmids" onclick="switchModule('plasmids', this)">Plasmids</div>
+  <div class="tab" data-module="binning" onclick="switchModule('binning', this)">Binning</div>
+</div>
+
+<div id="results-content">
+  <p style="color:var(--text-muted)">Select a sample to view results</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentModule = 'args';
+let currentData = {};
+
+async function initResults() {
+  const samples = await (await fetch('/api/samples')).json();
+  const sel = document.getElementById('sample-select');
+  sel.innerHTML = '<option value="">-- Choose a sample --</option>' +
+    samples.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+
+  // Check URL params
+  const params = new URLSearchParams(window.location.search);
+  const urlSample = params.get('sample');
+  if (urlSample) {
+    sel.value = urlSample;
+  } else if (samples.length > 0) {
+    sel.value = samples[0].name;
+  }
+  loadResults();
+}
+
+function switchModule(mod, el) {
+  currentModule = mod;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  loadResults();
+}
+
+async function loadResults() {
+  const sample = document.getElementById('sample-select').value;
+  if (!sample) return;
+
+  const container = document.getElementById('results-content');
+  container.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
+
+  try {
+    const data = await (await fetch(`/api/results/${sample}/${currentModule}`)).json();
+    currentData = data;
+
+    if (currentModule === 'qc') renderQCResults(data, container);
+    else if (currentModule === 'assembly') renderAssemblyResults(data, container);
+    else if (currentModule === 'args') renderARGResults(data, container);
+    else if (currentModule === 'viruses') renderVirusResults(data, container);
+    else if (currentModule === 'plasmids') renderPlasmidResults(data, container);
+    else if (currentModule === 'binning') renderBinningResults(data, container);
+  } catch(e) {
+    container.innerHTML = `<p style="color:var(--danger)">Error: ${e}</p>`;
+  }
+}
+
+// ── QC Tab ────────────────────────────────────────────────────────────────
+function renderQCResults(data, container) {
+  const f = data.fastp;
+  if (!f) {
+    container.innerHTML = '<p style="color:var(--text-muted)">No QC results found. Run the QC module first.</p>';
+    return;
+  }
+
+  const pct = (v) => (v * 100).toFixed(1) + '%';
+  const passRate = f.total_reads_before > 0 ? (f.total_reads_after / f.total_reads_before * 100).toFixed(1) : '0';
+
+  container.innerHTML = `
+    <div class="qc-grid">
+      <div class="qc-stat"><div class="qc-value">${fmtNum(f.total_reads_before)}</div><div class="qc-label">Total Reads (Raw)</div></div>
+      <div class="qc-stat"><div class="qc-value">${fmtNum(f.total_reads_after)}</div><div class="qc-label">Reads After Filter</div><div class="qc-sub">${passRate}% passed</div></div>
+      <div class="qc-stat"><div class="qc-value">${pct(f.q30_after)}</div><div class="qc-label">Q30 Rate</div><div class="qc-sub">Before: ${pct(f.q30_before)}</div></div>
+      <div class="qc-stat"><div class="qc-value">${pct(f.gc_after)}</div><div class="qc-label">GC Content</div></div>
+      <div class="qc-stat"><div class="qc-value">${pct(f.duplication_rate)}</div><div class="qc-label">Duplication Rate</div></div>
+      <div class="qc-stat"><div class="qc-value">${fmtNum(f.adapter_trimmed_reads)}</div><div class="qc-label">Adapter Trimmed</div></div>
+      <div class="qc-stat"><div class="qc-value">${fmtNum(f.reads_low_quality)}</div><div class="qc-label">Low Quality Reads</div></div>
+      <div class="qc-stat"><div class="qc-value">${fmtNum(f.reads_too_short)}</div><div class="qc-label">Too Short</div></div>
+    </div>
+    ${renderBarChart('Read Filtering Breakdown', [
+      {label: 'Passed', value: f.reads_passed_filter},
+      {label: 'Low Quality', value: f.reads_low_quality},
+      {label: 'Too Short', value: f.reads_too_short},
+      {label: 'Adapter Trimmed', value: f.adapter_trimmed_reads},
+    ])}
+    <div class="panel">
+      <div class="panel-header">
+        <span>Bases Summary</span>
+      </div>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Metric</th><th>Before Filtering</th><th>After Filtering</th></tr></thead>
+          <tbody>
+            <tr><td>Total Reads</td><td>${fmtNum(f.total_reads_before)}</td><td>${fmtNum(f.total_reads_after)}</td></tr>
+            <tr><td>Total Bases</td><td>${fmtNum(f.total_bases_before)}</td><td>${fmtNum(f.total_bases_after)}</td></tr>
+            <tr><td>Q30 Rate</td><td>${pct(f.q30_before)}</td><td>${pct(f.q30_after)}</td></tr>
+            <tr><td>GC Content</td><td>${pct(f.gc_before)}</td><td>${pct(f.gc_after)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Assembly Tab ──────────────────────────────────────────────────────────
+function renderAssemblyResults(data, container) {
+  const a = data.assembly;
+  if (!a) {
+    container.innerHTML = '<p style="color:var(--text-muted)">No assembly results found. Run the Assembly module first.</p>';
+    return;
+  }
+
+  let mappingHTML = '';
+  const m = data.mapping;
+  if (m && m.length > 0) {
+    const mr = m[0];
+    mappingHTML = `
+      <div class="panel" style="margin-top:20px">
+        <div class="panel-header"><span>Read Mapping</span></div>
+        <div class="panel-body">
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>Total Primary Reads</td><td>${fmtNum(mr.total_primary || mr.total_reads || '')}</td></tr>
+              <tr><td>Mapped (Unfiltered)</td><td>${fmtNum(mr.mapped_unfiltered || '')}</td></tr>
+              <tr><td>Mapped (Filtered)</td><td>${fmtNum(mr.mapped_filtered || '')}</td></tr>
+              <tr><td>Proportion (Unfiltered)</td><td>${mr.prop_unfiltered || ''}</td></tr>
+              <tr><td>Proportion (Filtered)</td><td>${mr.prop_filtered || ''}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  container.innerHTML = `
+    <div class="qc-grid">
+      <div class="qc-stat"><div class="qc-value">${fmtNum(a.num_contigs)}</div><div class="qc-label">Total Contigs</div></div>
+      <div class="qc-stat"><div class="qc-value">${fmtNum(a.total_length)}</div><div class="qc-label">Total Length (bp)</div></div>
+      <div class="qc-stat"><div class="qc-value">${fmtNum(a.n50)}</div><div class="qc-label">N50</div></div>
+      <div class="qc-stat"><div class="qc-value">${fmtNum(a.longest)}</div><div class="qc-label">Longest Contig</div></div>
+      <div class="qc-stat"><div class="qc-value">${fmtNum(a.shortest)}</div><div class="qc-label">Shortest Contig</div></div>
+    </div>
+    ${mappingHTML}
+    ${data.contigs_kept && data.contigs_kept.length > 0 ? `
+      <div class="panel" style="margin-top:20px">
+        <div class="panel-header">
+          <span>QC-Passed Contigs (${data.contigs_kept.length})</span>
+          <button class="btn btn-secondary" style="padding:6px 14px;font-size:12px" onclick="exportTableCSV(currentData.contigs_kept, 'contigs_kept.csv')">📥 Export CSV</button>
+        </div>
+        <div class="panel-body" style="overflow-x:auto;max-height:400px;overflow-y:auto">
+          <table>
+            <thead><tr>${Object.keys(data.contigs_kept[0]).map(k=>`<th>${k}</th>`).join('')}</tr></thead>
+            <tbody>${data.contigs_kept.slice(0,300).map(r=>`<tr>${Object.values(r).map(v=>`<td>${v||''}</td>`).join('')}</tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>` : ''}
+  `;
+}
+
+// ── ARGs Tab ──────────────────────────────────────────────────────────────
+function renderARGResults(data, container) {
+  const rows = data.summary || [];
+  if (rows.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted)">No ARG results found. Run the ARGs module first.</p>';
+    return;
+  }
+
+  // Count by context and source
+  const byContext = {}, bySource = {}, byClass = {};
+  rows.forEach(r => {
+    byContext[r.context] = (byContext[r.context]||0) + 1;
+    bySource[r.source] = (bySource[r.source]||0) + 1;
+    if (r.ARG_class) byClass[r.ARG_class] = (byClass[r.ARG_class]||0) + 1;
+  });
+
+  const contexts = Object.keys(byContext);
+  const sources = Object.keys(bySource);
+
+  const classChartData = Object.entries(byClass).map(([k,v]) => ({label: k, value: v}));
+
+  container.innerHTML = `
+    <div class="summary-cards">
+      <div class="summary-card"><div class="value">${rows.length}</div><div class="label">Total ARGs</div></div>
+      <div class="summary-card"><div class="value">${contexts.length}</div><div class="label">Contexts</div></div>
+      <div class="summary-card"><div class="value">${sources.length}</div><div class="label">Tools</div></div>
+    </div>
+    ${renderBarChart('ARG Class Distribution', classChartData)}
+    <div class="filters">
+      <select id="filter-context" onchange="filterTable()">
+        <option value="">All contexts</option>
+        ${contexts.map(c=>`<option value="${c}">${c} (${byContext[c]})</option>`).join('')}
+      </select>
+      <select id="filter-source" onchange="filterTable()">
+        <option value="">All sources</option>
+        ${sources.map(s=>`<option value="${s}">${s} (${bySource[s]})</option>`).join('')}
+      </select>
+      <input type="text" class="search-box" id="filter-search" placeholder="Search genes..." oninput="filterTable()">
+      <button class="btn btn-secondary" onclick="exportTableCSV(currentData.summary, 'arg_results.csv')">📥 Export CSV</button>
+    </div>
+    <div class="panel">
+      <div class="panel-body" style="overflow-x:auto;max-height:500px;overflow-y:auto">
+        <table id="results-table">
+          <thead><tr><th>Source</th><th>Context</th><th>Gene</th><th>ARG Class</th><th>Contig</th><th>Identity</th><th>Score</th><th>Notes</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div style="margin-top:8px;color:var(--text-muted);font-size:12px" id="table-count"></div>
+  `;
+
+  filterTable();
+}
+
+function filterTable() {
+  const rows = currentData.summary || [];
+  const ctx = document.getElementById('filter-context')?.value || '';
+  const src = document.getElementById('filter-source')?.value || '';
+  const q = (document.getElementById('filter-search')?.value || '').toLowerCase();
+
+  const filtered = rows.filter(r => {
+    if (ctx && r.context !== ctx) return false;
+    if (src && r.source !== src) return false;
+    if (q && !Object.values(r).some(v => (v||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  const tbody = document.querySelector('#results-table tbody');
+  tbody.innerHTML = filtered.slice(0, 500).map(r => `
+    <tr>
+      <td><span style="color:var(--info)">${r.source||''}</span></td>
+      <td>${r.context||''}</td>
+      <td><strong>${r.gene||''}</strong></td>
+      <td>${r.ARG_class||''}</td>
+      <td style="font-family:monospace;font-size:11px">${(r.contig_or_gene||'').substring(0,40)}</td>
+      <td>${r.identity||''}</td>
+      <td>${r.evalue_or_score||''}</td>
+      <td style="color:var(--text-muted);font-size:11px">${r.notes||''}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('table-count').textContent =
+    `Showing ${Math.min(filtered.length, 500)} of ${filtered.length} entries` +
+    (filtered.length > 500 ? ' (limited to 500 rows)' : '');
+}
+
+// ── Viruses Tab ───────────────────────────────────────────────────────────
+function renderVirusResults(data, container) {
+  const rows = data.checkv || [];
+  if (rows.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted)">No virus results found. Run the Viruses module first.</p>';
+    return;
+  }
+
+  // Quality tier distribution
+  const byQuality = {};
+  rows.forEach(r => {
+    const q = r.checkv_quality || r.quality || 'Unknown';
+    byQuality[q] = (byQuality[q]||0) + 1;
+  });
+  const qualityChartData = Object.entries(byQuality).map(([k,v]) => ({label: k, value: v}));
+
+  container.innerHTML = `
+    <div class="summary-cards">
+      <div class="summary-card"><div class="value">${rows.length}</div><div class="label">Viral Contigs</div></div>
+      <div class="summary-card"><div class="value">${Object.keys(byQuality).length}</div><div class="label">Quality Tiers</div></div>
+    </div>
+    ${renderBarChart('CheckV Quality Distribution', qualityChartData)}
+    <div class="filters">
+      <button class="btn btn-secondary" onclick="exportTableCSV(currentData.checkv, 'virus_checkv.csv')">📥 Export CSV</button>
+    </div>
+    <div class="panel">
+      <div class="panel-body" style="overflow-x:auto;max-height:500px;overflow-y:auto">
+        <table>
+          <thead><tr>${Object.keys(rows[0]).map(k=>`<th>${k}</th>`).join('')}</tr></thead>
+          <tbody>${rows.slice(0,500).map(r=>`<tr>${Object.values(r).map(v=>`<td>${v||''}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Plasmids Tab ──────────────────────────────────────────────────────────
+function renderPlasmidResults(data, container) {
+  const rows = data.mobrecon || data.genomad || [];
+  if (rows.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted)">No Plasmid results found. Run the Plasmids module first.</p>';
+    return;
+  }
+
+  const sourceLabel = data.mobrecon ? 'MOB-recon' : 'geNomad';
+
+  container.innerHTML = `
+    <div class="summary-cards">
+      <div class="summary-card"><div class="value">${rows.length}</div><div class="label">Plasmids Detected</div></div>
+      <div class="summary-card"><div class="value">${sourceLabel}</div><div class="label">Source</div></div>
+    </div>
+    <div class="filters">
+      <button class="btn btn-secondary" onclick="exportTableCSV(currentData.mobrecon || currentData.genomad, 'plasmid_results.csv')">📥 Export CSV</button>
+    </div>
+    <div class="panel">
+      <div class="panel-body" style="overflow-x:auto;max-height:500px;overflow-y:auto">
+        <table>
+          <thead><tr>${Object.keys(rows[0]).map(k=>`<th>${k}</th>`).join('')}</tr></thead>
+          <tbody>${rows.slice(0,500).map(r=>`<tr>${Object.values(r).map(v=>`<td>${v||''}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Binning Tab ───────────────────────────────────────────────────────────
+function renderBinningResults(data, container) {
+  const rows = data.magscot || [];
+  const checkm = data.checkm2 || [];
+
+  if (rows.length === 0 && checkm.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted)">No Binning results found. Run the Binning module first.</p>';
+    return;
+  }
+
+  let checkmHTML = '';
+  if (checkm.length > 0) {
+    checkmHTML = `
+      <div class="panel" style="margin-top:20px">
+        <div class="panel-header">
+          <span>MAG Quality (CheckM2)</span>
+          <button class="btn btn-secondary" style="padding:6px 14px;font-size:12px" onclick="exportTableCSV(currentData.checkm2, 'checkm2_quality.csv')">📥 Export CSV</button>
+        </div>
+        <div class="panel-body" style="overflow-x:auto;max-height:400px;overflow-y:auto">
+          <table>
+            <thead><tr>${Object.keys(checkm[0]).map(k=>`<th>${k}</th>`).join('')}</tr></thead>
+            <tbody>${checkm.slice(0,300).map(r=>`<tr>${Object.values(r).map(v=>`<td>${v||''}</td>`).join('')}</tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  container.innerHTML = `
+    <div class="summary-cards">
+      <div class="summary-card"><div class="value">${rows.length}</div><div class="label">Contigs in Bins</div></div>
+      ${checkm.length > 0 ? `<div class="summary-card"><div class="value">${checkm.length}</div><div class="label">MAGs Assessed</div></div>` : ''}
+    </div>
+    <div class="filters">
+      <button class="btn btn-secondary" onclick="exportTableCSV(currentData.magscot, 'binning_magscot.csv')">📥 Export CSV</button>
+    </div>
+    ${rows.length > 0 ? `<div class="panel">
+      <div class="panel-body" style="overflow-x:auto;max-height:500px;overflow-y:auto">
+        <table>
+          <thead><tr>${Object.keys(rows[0]).map(k=>`<th>${k}</th>`).join('')}</tr></thead>
+          <tbody>${rows.slice(0,500).map(r=>`<tr>${Object.values(r).map(v=>`<td>${v||''}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+    ${checkmHTML}
+  `;
+}
+
+initResults();
+</script>
+{% endblock %}

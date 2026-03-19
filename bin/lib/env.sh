@@ -61,6 +61,19 @@ _env_name(){
     typing_hotspot)         echo "hotspot_env" ;;
     typer)                  echo "mobsuite_env" ;;
     cluster)                echo "stampede_env" ;;
+    # --- Virus-Submodule ---
+    viruses)                echo "env_viruses" ;;
+    metaviralspades)        echo "env_assembly_core" ;;
+    virsorter2)             echo "virsorter2_env" ;;
+    vibrant)                echo "vibrant_env" ;;
+    union_virus)            echo "plasmids_core" ;;
+    checkv)                 echo "checkv_env" ;;
+    # --- ARG-Submodule ---
+    args)                   echo "env_args" ;;
+    deeparg)                echo "deeparg_env" ;;
+    rgi)                    echo "rgi_env" ;;
+    amrplusplus)            echo "amrplusplus_env" ;;
+    summary_args)           echo "deeparg_env" ;;
     *)                      echo "UNKNOWN" ;;
   esac
 }
@@ -80,6 +93,15 @@ _resolve_creator(){
     # All plasmid substeps are provisioned by the umbrella creator
     viralverify|plasme|genomad|mobrecon|union_cluster|typing_hotspot|coverm|cluster|typer)
       [[ -s "$ROOT/envs/create_env_plasmids.sh" ]] && { echo "$ROOT/envs/create_env_plasmids.sh"; return 0; }
+      ;;
+    # Virus substeps: metaviralspades reuses assembly env, others have own creators or reuse plasmids
+    metaviralspades) echo "$ROOT/envs/create_env_assembly.sh"; return 0 ;;
+    union_virus)
+      [[ -s "$ROOT/envs/create_env_plasmids.sh" ]] && { echo "$ROOT/envs/create_env_plasmids.sh"; return 0; }
+      ;;
+    # ARG substeps: summary_args reuses deeparg env
+    summary_args)
+      [[ -s "$ROOT/envs/create_env_deeparg.sh" ]] && { echo "$ROOT/envs/create_env_deeparg.sh"; return 0; }
       ;;
   esac
   return 1
@@ -102,6 +124,17 @@ _env_exists(){
     _list_env_names | grep -qx mobsuite_env    &&
     _list_env_names | grep -qx hotspot_env     &&
     _list_env_names | grep -qx stampede_env
+  elif [[ "$name" == "env_viruses" ]]; then
+    _list_env_names | grep -qx env_assembly_core &&
+    _list_env_names | grep -qx viralverify_env   &&
+    _list_env_names | grep -qx genomad_env       &&
+    _list_env_names | grep -qx virsorter2_env    &&
+    _list_env_names | grep -qx vibrant_env       &&
+    _list_env_names | grep -qx checkv_env
+  elif [[ "$name" == "env_args" ]]; then
+    _list_env_names | grep -qx deeparg_env      &&
+    _list_env_names | grep -qx rgi_env           &&
+    _list_env_names | grep -qx amrplusplus_env
   else
     _list_env_names | grep -qx "$name"
   fi
@@ -119,7 +152,9 @@ _recreate_env(){
 # =========================
 list_env_specs(){
   for m in ingest qc assembly binning sra_tools sim mapping_coverm coverm plasmids \
-           viralverify plasme genomad mobrecon typer cluster union_cluster typing_hotspot; do
+           viralverify plasme genomad mobrecon typer cluster union_cluster typing_hotspot \
+           virsorter2 vibrant checkv \
+           deeparg rgi amrplusplus summary_args; do
     local env create
     env="$(_env_name "$m")"
     if create="$(_resolve_creator "$m")"; then :; else

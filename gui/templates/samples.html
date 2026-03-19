@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% set page = "samples" %}
+{% block title %}Samples{% endblock %}
+{% block heading %}Samples{% endblock %}
+
+{% block content %}
+<div class="add-sample-form">
+  <h3 style="margin-bottom:16px;font-size:15px">Add New Sample</h3>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Sample Name</label>
+      <input type="text" id="new-sample-name" placeholder="e.g. SampleA">
+    </div>
+    <div class="form-group">
+      <label>Source Type</label>
+      <select id="new-sample-type">
+        <option value="fasta">Upload Custom Contigs (FASTA)</option>
+        <option value="sra">SRA Accession</option>
+        <option value="local">Local reads manual setup</option>
+      </select>
+    </div>
+    <div class="form-group" id="sra-field" style="display:none">
+      <label>SRA Accession</label>
+      <input type="text" id="new-sample-sra" placeholder="e.g. SRR12345678">
+    </div>
+    <div class="form-group" id="fasta-field">
+      <label>Select FASTA File</label>
+      <input type="file" id="new-sample-fasta" accept=".fasta,.fa,.fna">
+    </div>
+    <button class="btn btn-primary" onclick="addSample()">+ Add Sample</button>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>All Samples</span>
+    <span id="sample-count" style="font-size:12px;color:var(--text-muted)"></span>
+  </div>
+  <div class="panel-body">
+    <table id="samples-table">
+      <thead><tr><th>Sample</th><th>ingest</th><th>qc</th><th>assembly</th><th>binning</th><th>plasmids</th><th>viruses</th><th>args</th><th>Disk</th><th>Actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MODS = ['ingest','qc','assembly','binning','plasmids','viruses','args'];
+const sIcon = s => s==='done'?'<span class="status-done">✓</span>':s==='running'?'<span class="status-running">●</span>':'<span class="status-pending">–</span>';
+
+document.getElementById('new-sample-type').addEventListener('change', function() {
+  document.getElementById('sra-field').style.display = this.value === 'sra' ? '' : 'none';
+  document.getElementById('fasta-field').style.display = this.value === 'fasta' ? '' : 'none';
+});
+
+async function loadSamples() {
+  const samples = await (await fetch('/api/samples')).json();
+  document.getElementById('sample-count').textContent = samples.length + ' sample(s)';
+  const tbody = document.querySelector('#samples-table tbody');
+  tbody.innerHTML = samples.map(s => `
+    <tr>
+      <td><strong>${s.name}</strong></td>
+      ${MODS.map(m => `<td>${sIcon(s.status[m] || 'pending')}</td>`).join('')}
+      <td class="disk-badge" id="disk-${s.name}">…</td>
+      <td>
+        <a href="/run?sample=${s.name}" style="color:var(--accent);text-decoration:none;font-size:12px">▶ Run</a>
+        &nbsp;
+        <a href="/results?sample=${s.name}" style="color:var(--info);text-decoration:none;font-size:12px">📈 Results</a>
+        &nbsp;
+        <a href="#" onclick="deleteSample('${s.name}'); return false;" style="color:var(--danger);text-decoration:none;font-size:12px">🗑 Delete</a>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="10" style="color:var(--text-muted)">No samples found. Add one above.</td></tr>';
+
+  // Load disk usage in background
+  samples.forEach(s => {
+    fetch(`/api/disk/${s.name}`).then(r=>r.json()).then(d => {
+      const el = document.getElementById(`disk-${s.name}`);
+      if (el) el.textContent = formatBytes(d.bytes);
+    }).catch(()=>{});
+  });
+}
+
+function deleteSample(name) {
+  showConfirm(
+    'Delete Sample',
+    `Are you sure you want to delete <strong>${name}</strong> and all its data? This cannot be undone.`,
+    async () => {
+      try {
+        const resp = await fetch(`/api/samples/${name}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast(`Sample "${name}" deleted (${data.removed.length} directories removed)`);
+          loadSamples();
+        } else {
+          showToast(data.error || 'Delete failed', 'error');
+        }
+      } catch(e) { showToast('Delete failed: ' + e, 'error'); }
+    }
+  );
+}
+
+async function addSample() {
+  const name = document.getElementById('new-sample-name').value.trim();
+  const type = document.getElementById('new-sample-type').value;
+  const sra = document.getElementById('new-sample-sra').value.trim();
+
+  if (!name) { showToast('Enter a sample name', 'error'); return; }
+
+  let resp;
+  if (type === 'fasta') {
+    const fileInput = document.getElementById('new-sample-fasta');
+    if (!fileInput.files.length) { showToast('Select a FASTA file', 'error'); return; }
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('type', 'fasta');
+    fd.append('file', fileInput.files[0]);
+
+    showToast('Uploading file, please wait...', 'info');
+    resp = await fetch('/api/samples/add', { method: 'POST', body: fd });
+  } else {
+    const body = { name, type };
+    if (type === 'sra') {
+      if (!sra) { showToast('Enter an SRA accession', 'error'); return; }
+      body.value = sra;
+    }
+    resp = await fetch('/api/samples/add', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+  }
+
+  const data = await resp.json();
+  if (data.error) { showToast(data.error, 'error'); }
+  else { showToast('Sample "' + name + '" added. ' + (data.note || '')); }
+
+  document.getElementById('new-sample-name').value = '';
+  document.getElementById('new-sample-sra').value = '';
+  document.getElementById('new-sample-fasta').value = '';
+  loadSamples();
+}
+
+loadSamples();
+</script>
+{% endblock %}

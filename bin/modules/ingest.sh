@@ -78,12 +78,27 @@ run_ingest(){
 
   [[ -n "$FASTQ_MANIFEST" && -s "$FASTQ_MANIFEST" ]] || _die "Provide --fastq <manifest.tsv>"
 
-  # Read and validate header
+  # Read and validate header (must have sample; and AT LEAST one of fq1 or srr)
   local hdr
   hdr="$(head -n1 "$FASTQ_MANIFEST" | tr -d '\r')"
   grep -qw "sample" <<<"$hdr" || _die "manifest header missing column: sample"
-  grep -qw "fq1"    <<<"$hdr" || _die "manifest header missing column: fq1"
-  # fq2 optional
+  if ! (grep -qw "fq1" <<<"$hdr" || grep -qw "srr" <<<"$hdr"); then
+    _die "manifest header must contain at least 'fq1' or 'srr'"
+  fi
+
+  # Header column indexes
+  local col_sample=0 col_fq1=0 col_fq2=0 col_srr=0 col_md5=0
+  local i=1
+  for col in $hdr; do
+    case "$col" in
+      sample) col_sample=$i ;;
+      fq1)    col_fq1=$i    ;;
+      fq2)    col_fq2=$i    ;;
+      srr)    col_srr=$i    ;;
+      md5)    col_md5=$i    ;;
+    esac
+    ((i++))
+  done
 
   # Prepare canonical manifest
   local canon_path="$ROOT/$CANONICAL"
@@ -92,18 +107,76 @@ run_ingest(){
   # Iterate rows
   tail -n +2 "$FASTQ_MANIFEST" | tr -d '\r' | \
   awk -F'\t' 'NF{print}' | \
-  while IFS=$'\t' read -r sample fq1 fq2 rest; do
-    [[ -n "${sample:-}" ]] || continue
+  while IFS=$'\t' read -r -a cols; do
+    # bash array is 0-indexed, awk/cut logic was 1-indexed. offset by 1.
+    local sample="" fq1="" fq2="" srr="" md5=""
+    [[ $col_sample -gt 0 ]] && sample="${cols[$((col_sample-1))]:-}"
+    [[ $col_fq1 -gt 0 ]]    && fq1="${cols[$((col_fq1-1))]:-}"
+    [[ $col_fq2 -gt 0 ]]    && fq2="${cols[$((col_fq2-1))]:-}"
+    [[ $col_srr -gt 0 ]]    && srr="${cols[$((col_srr-1))]:-}"
+    [[ $col_md5 -gt 0 ]]    && md5="${cols[$((col_md5-1))]:-}"
 
-    [[ -s "${fq1:-}" ]] || _die "$sample: fq1 not found or empty ($fq1)"
-    if [[ -n "${fq2:-}" ]]; then
-      [[ -s "$fq2" ]] || _die "$sample: fq2 given but file missing/empty ($fq2)"
+    [[ -n "$sample" ]] || continue
+
+    local norm1="" norm2=""
+
+    if [[ -n "$srr" ]]; then
+      # --- SRA Download logic ---
+      echo "[ingest] $sample: downloading SRR $srr ..."
+      local outdir="$ROOT/SRA/reads/$sample"
+      _mkdirp "$outdir"
+      
+      # Use fasterq-dump (sra-tools) then compress
+      # We assume env_sra_tools is active (which it should be based on main.sh wrapping)
+      if [[ ! -f "$outdir/${srr}_1.fastq.gz" && ! -f "$outdir/${sample}_R1.fastq.gz" ]]; then
+          fasterq-dump --split-3 --threads "${CPUS:-4}" --outdir "$outdir" "$srr"
+          
+          # Compress and rename to standardized form
+          if [[ -f "$outdir/${srr}_1.fastq" ]]; then
+            pigz -p "${CPUS:-4}" "$outdir/${srr}_1.fastq"
+            mv "$outdir/${srr}_1.fastq.gz" "$outdir/${sample}_R1.fastq.gz"
+            norm1="$outdir/${sample}_R1.fastq.gz"
+          fi
+          if [[ -f "$outdir/${srr}_2.fastq" ]]; then
+            pigz -p "${CPUS:-4}" "$outdir/${srr}_2.fastq"
+            mv "$outdir/${srr}_2.fastq.gz" "$outdir/${sample}_R2.fastq.gz"
+            norm2="$outdir/${sample}_R2.fastq.gz"
+          fi
+          # Single end case
+          if [[ -f "$outdir/${srr}.fastq" ]]; then
+             pigz -p "${CPUS:-4}" "$outdir/${srr}.fastq"
+             mv "$outdir/${srr}.fastq.gz" "$outdir/${sample}_R1.fastq.gz"
+             norm1="$outdir/${sample}_R1.fastq.gz"
+          fi
+      else
+          echo "[ingest] $sample: SRA outputs already exist, skipping download."
+          norm1="$outdir/${sample}_R1.fastq.gz"
+          [[ -f "$outdir/${sample}_R2.fastq.gz" ]] && norm2="$outdir/${sample}_R2.fastq.gz"
+      fi
+
+    elif [[ -n "$fq1" ]]; then
+      # --- Local file logic ---
+      [[ -s "$fq1" ]] || _die "$sample: fq1 not found or empty ($fq1)"
+      if [[ -n "$fq2" ]]; then
+        [[ -s "$fq2" ]] || _die "$sample: fq2 given but file missing/empty ($fq2)"
+      fi
+
+      # Optional MD5 Check
+      if [[ -n "$md5" ]]; then
+        echo "[ingest] $sample: matching MD5 checksum for $fq1 ..."
+        # Only check fq1 for now to keep it simple, or split md5 by comma if multiple were supported
+        if ! echo "$md5  $fq1" | md5sum -c --status -; then
+          _die "$sample: MD5 checksum failed for $fq1"
+        fi
+      fi
+
+      # Normalize & symlink under SRA/reads/<sample>
+      read -r norm1 norm2 <<<"$(_link_normalized "$sample" "$fq1" "$fq2")"
+    else
+       _die "$sample: Neither fq1 nor srr provided"
     fi
 
-    # Normalize & symlink under SRA/reads/<sample>
-    read -r norm1 norm2 <<<"$(_link_normalized "$sample" "$fq1" "${fq2:-}")"
-
-    # Append to canonical manifest (fq2 may be empty)
+    # Append to canonical manifest (fq2/norm2 may be empty)
     if [[ -n "${norm2:-}" ]]; then
       echo -e "${sample}\t${norm1}\t${norm2}" >> "$canon_path"
     else

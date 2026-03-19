@@ -30,15 +30,16 @@ Usage:
   bin/main.sh run <module|all> [--test|--resume|--force] [--from X] [--only X] [--sample ID] \
                                [--set k=v ...] [--force-env[=all|<module>|<env>]]
   bin/main.sh env list
-  bin/main.sh env create <all|ingest|qc|assembly|binning|sra_tools|sim|plasmids>
-  bin/main.sh env remove <ingest|qc|assembly|binning|sra_tools|sim>
+  bin/main.sh env create <all|ingest|qc|assembly|binning|sra_tools|sim|plasmids|viruses|args|gui>
+  bin/main.sh env remove <ingest|qc|assembly|binning|sra_tools|sim|viruses>
 
 Direct helpers:
   bin/main.sh plasmids_env
   bin/main.sh plasmids --sample ID [--cpus N] [--force|--resume]
+  bin/main.sh gui [--port 5000] [--host 127.0.0.1]
 
 Modules:
-  ingest, qc, assembly, binning, sim, plasmids, all
+  ingest, qc, assembly, binning, sim, plasmids, viruses, args, all
 USAGE
 }
 
@@ -85,6 +86,18 @@ run_plasmids_wrap(){
   bash "$ROOT/bin/modules/plasmids.sh"
 }
 
+run_viruses_wrap(){
+  [[ -s "$ROOT/bin/modules/viruses.sh" ]] || { echo "[err] bin/modules/viruses.sh not found"; exit 2; }
+  export ROOT MODE RESUME FORCE FROM ONLY SAMPLE
+  bash "$ROOT/bin/modules/viruses.sh"
+}
+
+run_args_wrap(){
+  [[ -s "$ROOT/bin/modules/args.sh" ]] || { echo "[err] bin/modules/args.sh not found"; exit 2; }
+  export ROOT MODE RESUME FORCE FROM ONLY SAMPLE
+  bash "$ROOT/bin/modules/args.sh"
+}
+
 # ---- new: run all ----
 run_all_wrap(){
   echo "[all] start MODE=$MODE RESUME=$RESUME FORCE=$FORCE SAMPLE=${SAMPLE:-}"
@@ -94,6 +107,8 @@ run_all_wrap(){
   run_binning_wrap
   # sim is optional and usually separate; keep out of default chain
   run_plasmids_wrap
+  run_viruses_wrap
+  run_args_wrap
   echo "[all] done"
 }
 
@@ -102,7 +117,7 @@ env_list(){ printf "module\tenv\tcreator\n"; list_env_specs; }
 env_create(){
   local target="${1:-}"; [[ -z "$target" ]] && { echo "[err] env create <target>"; exit 2; }
   if [[ "$target" == "all" ]]; then
-    for m in ingest qc assembly binning sra_tools sim plasmids; do create_env_by_module "$m"; done
+    for m in ingest qc assembly binning sra_tools sim plasmids viruses args; do create_env_by_module "$m"; done
   else
     create_env_by_module "$target"
   fi
@@ -170,6 +185,8 @@ case "$cmd" in
         sra_tools) FORCE_ENV_TARGET="env_sra_tools" ;;
         sim)       FORCE_ENV_TARGET="sim_env" ;;
         plasmids)  FORCE_ENV_TARGET="env_plasmids" ;;
+        viruses)   FORCE_ENV_TARGET="env_viruses" ;;
+        args)      FORCE_ENV_TARGET="env_args" ;;
         *) : ;;
       esac
     fi
@@ -181,9 +198,28 @@ case "$cmd" in
       binning)  run_binning_wrap  ;;
       sim)      run_sim_wrap      ;;
       plasmids) run_plasmids_wrap ;;
-      all)      : "${SAMPLE:?need --sample for plasmids in all}"; run_all_wrap ;;
+      viruses)  run_viruses_wrap  ;;
+      args)     run_args_wrap     ;;
+      all)      : "${SAMPLE:?need --sample for plasmids/viruses in all}"; run_all_wrap ;;
       *) usage; exit 2 ;;
     esac
+    ;;
+  gui)
+    PORT="5000"
+    HOST="127.0.0.1"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --port) require_val "$1" "${2:-}"; PORT="$2"; shift 2 ;;
+        --host) require_val "$1" "${2:-}"; HOST="$2"; shift 2 ;;
+        *) echo "Unknown gui option: $1" >&2; exit 2 ;;
+      esac
+    done
+    export ROOT
+    source "$ROOT/bin/lib/env.sh"
+    _list_env_names | grep -qx gui_env || bash "$ROOT/envs/create_env_gui.sh" || { echo "[err] GUI env creation failed" >&2; exit 3; }
+    eval "$(micromamba shell hook --shell=bash)"
+    micromamba activate gui_env
+    python3 "$ROOT/gui/app.py" --port "$PORT" --host "$HOST"
     ;;
   *) usage; exit 2 ;;
 esac

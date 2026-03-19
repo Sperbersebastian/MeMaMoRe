@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% set page = "logs" %}
+{% block title %}Logs{% endblock %}
+{% block heading %}Logs{% endblock %}
+
+{% block content %}
+<div class="form-row" style="margin-bottom:16px">
+  <div class="form-group" style="min-width:200px">
+    <label>Sample</label>
+    <select id="log-sample" onchange="loadLog()"><option value="">Select sample...</option></select>
+  </div>
+  <div class="form-group" style="min-width:200px">
+    <label>Module</label>
+    <select id="log-module" onchange="loadLog()">
+      <option value="">Latest</option>
+      <option value="ingest">Ingest</option>
+      <option value="qc">QC</option>
+      <option value="assembly">Assembly</option>
+      <option value="binning">Binning</option>
+      <option value="plasmids">Plasmids</option>
+      <option value="viruses">Viruses</option>
+      <option value="args">ARGs</option>
+    </select>
+  </div>
+  <button class="btn btn-secondary" onclick="clearLog()">Clear</button>
+  <label>
+    <input type="checkbox" id="auto-scroll" checked> Auto-scroll
+  </label>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>Live Output</span>
+    <span id="log-status" style="font-size:12px;color:var(--text-muted)"></span>
+  </div>
+  <div class="log-viewer" id="log-output">
+    <div style="color:var(--text-muted)">Select a sample to view logs</div>
+  </div>
+</div>
+
+<div style="margin-top:20px">
+  <h3 style="font-size:15px;margin-bottom:12px">Job History</h3>
+  <div class="panel">
+    <div class="panel-body">
+      <table id="jobs-table">
+        <thead><tr><th>ID</th><th>Sample</th><th>Module</th><th>Status</th><th>Elapsed</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let eventSource = null;
+
+async function initLogs() {
+  const samples = await (await fetch('/api/samples')).json();
+  const sel = document.getElementById('log-sample');
+  sel.innerHTML = '<option value="">Select sample...</option>' +
+    samples.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  loadJobs();
+}
+
+function colorize(line) {
+  if (/\[ok\]|\bdone\b|✓|completed/i.test(line)) return 'log-ok';
+  if (/\[err\]|\berror\b|failed|FAIL/i.test(line)) return 'log-err';
+  if (/\[warn\]|WARNING/i.test(line)) return 'log-warn';
+  if (/^\[|INFO/i.test(line)) return 'log-info';
+  return '';
+}
+
+function loadLog() {
+  const sample = document.getElementById('log-sample').value;
+  const module = document.getElementById('log-module').value;
+  if (!sample) return;
+
+  // Close existing SSE
+  if (eventSource) { eventSource.close(); eventSource = null; }
+
+  const viewer = document.getElementById('log-output');
+  viewer.innerHTML = '<div style="color:var(--text-muted)">Connecting...</div>';
+  document.getElementById('log-status').textContent = 'streaming...';
+
+  const url = `/api/logs/${sample}` + (module ? `?module=${module}` : '');
+  eventSource = new EventSource(url);
+
+  eventSource.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.lines) {
+      viewer.innerHTML = data.lines.map(l => `<div class="log-line ${colorize(l)}">${escapeHtml(l)}</div>`).join('');
+    } else if (data.line) {
+      viewer.innerHTML += `<div class="log-line ${colorize(data.line)}">${escapeHtml(data.line)}</div>`;
+    }
+    if (data.done) {
+      document.getElementById('log-status').textContent = 'completed';
+      eventSource.close();
+    }
+    if (document.getElementById('auto-scroll').checked) {
+      viewer.scrollTop = viewer.scrollHeight;
+    }
+  };
+
+  eventSource.onerror = () => {
+    document.getElementById('log-status').textContent = 'disconnected';
+  };
+}
+
+function clearLog() {
+  document.getElementById('log-output').innerHTML = '';
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function loadJobs() {
+  const jobs = await (await fetch('/api/jobs')).json();
+  const tbody = document.querySelector('#jobs-table tbody');
+  if (jobs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted)">No jobs</td></tr>';
+    return;
+  }
+  tbody.innerHTML = jobs.reverse().map(j => `
+    <tr>
+      <td>${j.id}</td>
+      <td>${j.sample}</td>
+      <td>${j.module}</td>
+      <td>${j.running ? '<span class="status-running">● running</span>' :
+            j.exit_code === 0 ? '<span class="status-done">✓ done</span>' :
+            '<span style="color:var(--danger)">✗ failed</span>'}</td>
+      <td>${j.elapsed}s</td>
+      <td>${j.running ? `<button class="btn btn-danger" style="padding:4px 12px;font-size:11px" onclick="cancelJob(${j.id})">Cancel</button>` : ''}</td>
+    </tr>
+  `).join('');
+}
+
+async function cancelJob(id) {
+  await fetch(`/api/jobs/${id}`, {method:'DELETE'});
+  showToast('Job cancelled');
+  loadJobs();
+}
+
+initLogs();
+setInterval(loadJobs, 5000);
+</script>
+{% endblock %}

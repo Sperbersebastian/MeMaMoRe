@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% set page = "run" %}
+{% block title %}Run Pipeline{% endblock %}
+{% block heading %}Run Pipeline{% endblock %}
+
+{% block content %}
+<div class="form-row" style="margin-bottom:24px">
+  <div class="form-group" style="min-width:250px">
+    <label>Select Sample</label>
+    <select id="sample-select"><option value="">Loading...</option></select>
+  </div>
+</div>
+
+<!-- Multi-sample batch selector (hidden by default) -->
+<div id="batch-panel" style="display:none;margin-bottom:20px">
+  <div class="batch-selector" id="batch-selector"></div>
+</div>
+
+<div id="dep-warnings"></div>
+
+<h3 style="margin-bottom:12px;font-size:15px;color:var(--text-secondary)">Select Modules</h3>
+<div class="module-grid" id="module-grid"></div>
+
+<div class="action-bar">
+  <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">
+    ▶ Run Selected Modules
+  </button>
+  <label>
+    <span class="toggle" id="force-toggle" onclick="this.classList.toggle('active')"></span>
+    --force
+  </label>
+  <div class="form-group">
+    <label>--cpus</label>
+    <input type="number" id="cpus-input" value="14" min="1" max="64" style="width:70px">
+  </div>
+  <button class="btn btn-secondary" id="select-all-btn" onclick="selectAll()">Select All</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let modules = [];
+let selectedModules = new Set();
+let sampleStatus = {};
+let allSamples = [];
+
+// Module dependency map (mirrors backend)
+const MODULE_DEPS = {
+  qc: ['ingest'],
+  assembly: ['qc'],
+  binning: ['assembly'],
+  plasmids: ['assembly'],
+  viruses: ['assembly'],
+  args: ['assembly'],
+};
+
+async function init() {
+  modules = await (await fetch('/api/modules')).json();
+  allSamples = await (await fetch('/api/samples')).json();
+
+  // Sample dropdown
+  const sel = document.getElementById('sample-select');
+  sel.innerHTML = '<option value="">-- Choose a sample --</option>' +
+    '<option value="ALL">All Samples</option>' +
+    '<option value="BATCH">Select Multiple...</option>' +
+    allSamples.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  sel.addEventListener('change', () => {
+    const v = sel.value;
+    document.getElementById('batch-panel').style.display = v === 'BATCH' ? '' : 'none';
+    if (v === 'BATCH') {
+      renderBatchSelector();
+    }
+    loadModuleStatus(v);
+  });
+
+  // Check URL params
+  const params = new URLSearchParams(window.location.search);
+  const urlSample = params.get('sample');
+
+  // Module grid (initially without status)
+  renderModules({});
+
+  if (urlSample) {
+    sel.value = urlSample;
+    loadModuleStatus(urlSample);
+  } else if (allSamples.length > 0) {
+    sel.value = allSamples[0].name;
+    loadModuleStatus(allSamples[0].name);
+  }
+}
+
+function renderBatchSelector() {
+  const panel = document.getElementById('batch-selector');
+  panel.innerHTML = allSamples.map(s =>
+    `<label><input type="checkbox" value="${s.name}" class="batch-cb"> ${s.name}</label>`
+  ).join('');
+}
+
+function getSelectedBatchSamples() {
+  return [...document.querySelectorAll('.batch-cb:checked')].map(cb => cb.value);
+}
+
+async function loadModuleStatus(sample) {
+  if (!sample || sample === 'BATCH') {
+    sampleStatus = {};
+    renderModules({});
+    updateDepWarnings();
+    return;
+  }
+  if (sample === "ALL") {
+    sampleStatus = {};
+    renderModules({});
+    updateDepWarnings();
+    return;
+  }
+  sampleStatus = await (await fetch('/api/status/' + sample)).json();
+  renderModules(sampleStatus);
+  updateDepWarnings();
+}
+
+function renderModules(status) {
+  const grid = document.getElementById('module-grid');
+  grid.innerHTML = modules.map(m => {
+    const s = status[m.id] || 'pending';
+    const sel = selectedModules.has(m.id) ? 'selected' : '';
+    const statusClass = s === 'done' ? 'status-done' : s === 'running' ? 'status-running' : 'status-pending';
+    const statusLabel = s === 'done' ? '✓ done' : s === 'running' ? '● running' : '○ not run';
+    return `<div class="module-card ${sel}" onclick="toggleModule('${m.id}', this)">
+      <div class="checkbox">${sel ? '✓' : ''}</div>
+      <div class="module-name">${m.name}</div>
+      <div class="module-desc">${m.desc}</div>
+      <div class="module-status ${statusClass}">${statusLabel}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleModule(id, el) {
+  if (selectedModules.has(id)) { selectedModules.delete(id); } else { selectedModules.add(id); }
+  renderModules(sampleStatus);
+  updateDepWarnings();
+}
+
+function selectAll() {
+  if (selectedModules.size === modules.length) {
+    selectedModules.clear();
+  } else {
+    modules.forEach(m => selectedModules.add(m.id));
+  }
+  renderModules(sampleStatus);
+  updateDepWarnings();
+}
+
+function updateDepWarnings() {
+  const container = document.getElementById('dep-warnings');
+  const warnings = [];
+
+  for (const mod of selectedModules) {
+    const deps = MODULE_DEPS[mod] || [];
+    for (const dep of deps) {
+      if (sampleStatus[dep] !== 'done' && Object.keys(sampleStatus).length > 0) {
+        warnings.push(`<strong>${mod}</strong> requires <strong>${dep}</strong> to be completed first`);
+      }
+    }
+  }
+
+  if (warnings.length > 0) {
+    container.innerHTML = `<div class="warning-banner">
+      <span class="warn-icon">⚠️</span>
+      <div>
+        <strong>Dependency Warning</strong>
+        <ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul>
+      </div>
+    </div>`;
+  } else {
+    container.innerHTML = '';
+  }
+}
+
+async function runPipeline() {
+  const sampleVal = document.getElementById('sample-select').value;
+  if (!sampleVal) { showToast('Select a sample first', 'error'); return; }
+  if (selectedModules.size === 0) { showToast('Select at least one module', 'error'); return; }
+
+  const force = document.getElementById('force-toggle').classList.contains('active');
+  const cpus = parseInt(document.getElementById('cpus-input').value) || 14;
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Launching...';
+
+  const body = { modules: [...selectedModules], force, cpus };
+
+  if (sampleVal === 'BATCH') {
+    const batchSamples = getSelectedBatchSamples();
+    if (batchSamples.length === 0) { showToast('Select at least one sample', 'error'); btn.disabled = false; btn.textContent = '▶ Run Selected Modules'; return; }
+    body.samples = batchSamples;
+  } else {
+    body.sample = sampleVal;
+  }
+
+  try {
+    const resp = await fetch('/api/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    if (data.error) { showToast(data.error, 'error'); }
+    else {
+      let msg = `Launched ${data.launched.length} job(s)`;
+      if (data.warnings && data.warnings.length > 0) {
+        msg += ` (${data.warnings.length} warning(s))`;
+      }
+      showToast(msg);
+    }
+  } catch(e) { showToast('Failed: ' + e, 'error'); }
+
+  btn.disabled = false;
+  btn.textContent = '▶ Run Selected Modules';
+  if (sampleVal !== 'BATCH' && sampleVal !== 'ALL') {
+    loadModuleStatus(sampleVal);
+  }
+}
+
+init();
+</script>
+{% endblock %}

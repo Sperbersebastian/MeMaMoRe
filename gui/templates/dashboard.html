@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% set page = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="stat-cards" id="stat-cards"></div>
+<div class="panels">
+  <div class="panel">
+    <div class="panel-header">Pipeline Progress</div>
+    <div class="panel-body">
+      <table id="progress-table">
+        <thead><tr><th>Sample</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header">Running Jobs</div>
+    <div class="panel-body">
+      <ul class="activity-feed" id="activity-feed">
+        <li style="color:var(--text-muted)">Loading...</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MODULES = ['ingest','qc','assembly','binning','plasmids','viruses','args'];
+const statusIcon = s => s==='done'?'<span class="status-done">✓</span>':s==='running'?'<span class="status-running">●</span>':'<span class="status-pending">–</span>';
+
+async function loadDashboard() {
+  const samples = await (await fetch('/api/samples')).json();
+  const jobs = await (await fetch('/api/jobs')).json();
+
+  // Stat cards
+  const running = jobs.filter(j=>j.running).length;
+  const completed = samples.reduce((sum,s) => sum + Object.values(s.status).filter(v=>v==='done').length, 0);
+
+  // Calculate total disk asynchronously
+  let diskHTML = `<div class="stat-card"><div class="stat-icon blue">💾</div><div><div class="stat-value" id="total-disk">…</div><div class="stat-label">Disk Usage</div></div></div>`;
+
+  document.getElementById('stat-cards').innerHTML = `
+    <div class="stat-card"><div class="stat-icon teal">📁</div><div><div class="stat-value">${samples.length}</div><div class="stat-label">Samples</div></div></div>
+    <div class="stat-card"><div class="stat-icon blue">🧩</div><div><div class="stat-value">${MODULES.length}</div><div class="stat-label">Modules</div></div></div>
+    <div class="stat-card"><div class="stat-icon amber">⚡</div><div><div class="stat-value">${running}</div><div class="stat-label">Running</div></div></div>
+    <div class="stat-card"><div class="stat-icon green">✓</div><div><div class="stat-value">${completed}</div><div class="stat-label">Completed</div></div></div>
+    ${diskHTML}
+  `;
+
+  // Fetch total disk in background
+  let totalDisk = 0;
+  const diskPromises = samples.map(s =>
+    fetch(`/api/disk/${s.name}`).then(r=>r.json()).then(d => { totalDisk += d.bytes; }).catch(()=>{})
+  );
+  Promise.all(diskPromises).then(() => {
+    const el = document.getElementById('total-disk');
+    if (el) el.textContent = formatBytes(totalDisk);
+  });
+
+  // Progress table
+  const table = document.getElementById('progress-table');
+  table.querySelector('thead tr').innerHTML = '<th>Sample</th>' + MODULES.map(m=>`<th>${m}</th>`).join('');
+  table.querySelector('tbody').innerHTML = samples.map(s =>
+    `<tr><td><strong>${s.name}</strong></td>${MODULES.map(m=>`<td>${statusIcon(s.status[m]||'pending')}</td>`).join('')}</tr>`
+  ).join('') || '<tr><td colspan="8" style="color:var(--text-muted)">No samples found</td></tr>';
+
+  // Activity feed
+  const feed = document.getElementById('activity-feed');
+  if (jobs.length === 0) {
+    feed.innerHTML = '<li style="color:var(--text-muted)">No recent jobs</li>';
+  } else {
+    feed.innerHTML = jobs.slice(-10).reverse().map(j => {
+      const status = j.running ? '<span class="status-running">running</span>' : (j.exit_code===0 ? '<span class="status-done">done</span>' : '<span style="color:var(--danger)">failed</span>');
+      const elapsed = j.running ? `${j.elapsed}s` : '';
+      return `<li><span class="activity-time">${j.module}</span> ${j.sample} :: ${status} ${elapsed}</li>`;
+    }).join('');
+  }
+}
+
+loadDashboard();
+setInterval(loadDashboard, 8000);
+</script>
+{% endblock %}
