@@ -39,6 +39,7 @@ Core components include:
 | **Viruses** ⚠    | Viral prediction and QC *(not implemented yet)*      | geNomad, VirSorter2, VIBRANT, CheckV, iPHoP                                    |
 | **Functional** ⚠ | ARG and virulence detection *(not implemented yet)*  | DeepARG, VFDB, CARD                                                            |
 | **Simulation** ⚠ | Synthetic reads and controlled variation *(partial)* | ART, custom `sim_env`                                                          |
+| **Web GUI**      | Dashboard for sample management and visualization    | Flask, HTML/JS/CSS                                                             |
 
 ---
 
@@ -64,6 +65,8 @@ MeMaMoRe/
 │   ├── create_env_qc.sh
 │   └── ...
 ├── external/                # External cloned tools (e.g. Binny, COMEBin, HOTSPOT)
+├── gui/                     # Web Dashboard (Flask application)
+├── memamore-gui.sh          # Launcher script for the Web GUI
 ├── modules/                 # Tool-specific executors (assembly, plasmids, binning)
 ├── refdata/                 # Databases (GTDB, PLASMe, geNomad, HOTSPOT, etc.)
 ├── SRA/                     # Main workspace for input/output per sample
@@ -154,6 +157,34 @@ bin/main.sh run plasmids --global-cluster
 
 ```bash
 bin/main.sh run binning --sample test_sample
+```
+
+---
+
+## **Web GUI (Dashboard)**
+
+MeMaMoRe includes a fully-featured Web GUI for easier management of samples, pipeline execution, and result visualization.
+
+### Features
+* **Dashboard:** Overview of processed samples, system disk usage, and quick stats.
+* **Samples Management:** Add new samples, including uploading custom FASTA contigs, and manage existing ones.
+* **Run Pipeline:** Configure and launch different pipeline modules (QC, Assembly, Binning, etc.) per sample.
+* **Results Visualization:** Interactive tables, QC/Assembly tabs, clustering charts for ARG/Virus (where available), and CSV exports.
+
+### Starting the GUI
+
+You can launch the GUI using the provided script:
+
+```bash
+./memamore-gui.sh
+```
+
+This will start the local Flask development server (by default on `http://127.0.0.1:5000`) and attempt to open your default web browser.
+
+Alternatively, you can start it via the main CLI:
+
+```bash
+bin/main.sh gui --port 5000
 ```
 
 ---
