@@ -362,8 +362,9 @@ def api_results(sample, module):
     elif module == "plasmids":
         mobrecon_path = os.path.join(ROOT, "SRA", "plasmids", sample, "mobrecon", "mobtyper_results.txt")
         results["mobrecon"] = _read_tsv(mobrecon_path)
-        genomad_path = os.path.join(ROOT, "SRA", "plasmids", sample, "genomad", f"{sample}_summary", f"{sample}_plasmid_summary.tsv")
-        results["genomad"] = _read_tsv(genomad_path)
+        # geNomad names outputs after the input file (contigs_summary/contigs_plasmid_summary.tsv)
+        hits = glob.glob(os.path.join(ROOT, "SRA", "plasmids", sample, "genomad", "*_summary", "*_plasmid_summary.tsv"))
+        results["genomad"] = _read_tsv(hits[0]) if hits else []
     elif module == "binning":
         magscot_path = os.path.join(ROOT, "SRA", "binning", "magscot", sample, "contigs_to_bin.tsv")
         results["magscot"] = _read_tsv(magscot_path)

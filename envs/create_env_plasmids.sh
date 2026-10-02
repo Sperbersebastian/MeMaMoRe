@@ -231,11 +231,15 @@ echo "[ok] env plasme_env"
 
 
 # ========== 4) geNomad ==========
-create_if_missing genomad_env genomad hmmer prodigal-gv
+# geNomad <1.12 resolves to keras 3.x builds that crash in nn-classification
+create_if_missing genomad_env "genomad>=1.12" hmmer prodigal-gv
 micromamba run -n genomad_env bash -lc 'command -v genomad' >/dev/null
 gdst="$REFDATA_BASE/genomad"; mkdir -p "$gdst"
-if [[ ! -f "$gdst/genomad_db/version.txt" ]]; then
-  echo "[info] geNomad DB missing -> downloading to $gdst"
+# geNomad >=1.12 needs DB >=1.9; older DBs fail with "invalid literal for int()"
+gver="$(cat "$gdst/genomad_db/version.txt" 2>/dev/null || echo 0)"
+if [[ "$(printf '%s\n' 1.9 "$gver" | sort -V | head -n1)" != "1.9" ]]; then
+  echo "[info] geNomad DB missing or outdated (v$gver) -> downloading to $gdst"
+  rm -rf "$gdst/genomad_db"
   micromamba run -n genomad_env bash -lc "cd '$gdst' && genomad download-database ."
   [[ -f "$gdst/genomad_db/version.txt" ]] && \
     echo "[ok] genomad DB present at $gdst/genomad_db" || \

@@ -41,21 +41,23 @@ fi
 
 # ---------- run ----------
 cmd=( genomad end-to-end "$IN" "$OUT" "$DB" --threads "$CPUS" )
+# GENOMAD_SPLITS>0 lowers MMseqs2 RAM use (needed on machines with <~20 GB RAM)
+[[ "${GENOMAD_SPLITS:-0}" -gt 0 ]] && cmd+=( --splits "$GENOMAD_SPLITS" )
 echo "[genomad] ${cmd[*]}"
 "${cmd[@]}"
 
 # ---------- normalize outputs ----------
-# TSVs
-[[ -s "$OUT/genomad_plasmid_prediction.tsv" && ! -e "$OUT/plasmids.tsv" ]] && \
-  ln -sf "genomad_plasmid_prediction.tsv" "$OUT/plasmids.tsv"
-[[ -s "$OUT/genomad_virus_prediction.tsv" && ! -e "$OUT/viruses.tsv" ]] && \
-  ln -sf "genomad_virus_prediction.tsv" "$OUT/viruses.tsv"
-
-# FASTA
-[[ -s "$OUT/genomad_plasmids.fna" && ! -e "$OUT/plasmids.fna" ]] && \
-  ln -sf "genomad_plasmids.fna" "$OUT/plasmids.fna"
-[[ -s "$OUT/genomad_viruses.fna" && ! -e "$OUT/viruses.fna" ]] && \
-  ln -sf "genomad_viruses.fna" "$OUT/viruses.fna"
+# geNomad names files after the input basename, e.g. contigs_summary/contigs_plasmid_summary.tsv
+_link_first(){ # $1 link name, rest: candidates
+  local link="$OUT/$1"; shift
+  [[ -e "$link" ]] && return 0
+  local c; for c in "$@"; do [[ -s "$c" ]] && { ln -sf "$c" "$link"; return 0; }; done
+  return 0
+}
+_link_first plasmids.tsv "$OUT"/genomad_plasmid_prediction.tsv "$OUT"/*_summary/*_plasmid_summary.tsv
+_link_first viruses.tsv  "$OUT"/genomad_virus_prediction.tsv   "$OUT"/*_summary/*_virus_summary.tsv
+_link_first plasmids.fna "$OUT"/genomad_plasmids.fna "$OUT"/*_summary/*_plasmid.fna
+_link_first viruses.fna  "$OUT"/genomad_viruses.fna  "$OUT"/*_summary/*_virus.fna
 
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"
 echo "[genomad] done -> $OUT"
