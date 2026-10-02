@@ -56,12 +56,13 @@ _link_normalized(){
 # -------------------------------------------------------------------
 # Entry point
 #   Usage: run_ingest --fastq manifest.tsv
+#          run_ingest --srr SRRxxxxxx      (single accession; uses $SAMPLE)
 #   manifest.tsv columns (tab-separated, header required):
 #       sample   fq1   fq2
 #   fq2 is optional; leave empty for single-end
 # -------------------------------------------------------------------
 run_ingest(){
-  local FASTQ_MANIFEST=""
+  local FASTQ_MANIFEST="" SRR_ACC=""
   local CANONICAL
   CANONICAL="$(yq -r '.modules.ingest.canonical_manifest // "SRA/reads/manifest.tsv"' "$PARAMS_YAML" 2>/dev/null || echo "SRA/reads/manifest.tsv")"
 
@@ -70,13 +71,22 @@ run_ingest(){
     case "$1" in
       --fastq) FASTQ_MANIFEST="${2:-}"; shift 2 ;;
       --fastq=*) FASTQ_MANIFEST="${1#--fastq=}"; shift ;;
+      --srr) SRR_ACC="${2:-}"; shift 2 ;;
+      --srr=*) SRR_ACC="${1#--srr=}"; shift ;;
       --set|--from|--only|--sample) shift 2 || true ;;
       --test|--resume|--force) shift ;;
       *) shift ;;
     esac
   done
 
-  [[ -n "$FASTQ_MANIFEST" && -s "$FASTQ_MANIFEST" ]] || _die "Provide --fastq <manifest.tsv>"
+  # Single accession (e.g. from the GUI): wrap it into a one-row manifest
+  if [[ -n "$SRR_ACC" ]]; then
+    [[ -n "${SAMPLE:-}" ]] || _die "--srr requires --sample"
+    FASTQ_MANIFEST="$(mktemp)"
+    printf "sample\tsrr\n%s\t%s\n" "$SAMPLE" "$SRR_ACC" > "$FASTQ_MANIFEST"
+  fi
+
+  [[ -n "$FASTQ_MANIFEST" && -s "$FASTQ_MANIFEST" ]] || _die "Provide --fastq <manifest.tsv> or --srr <accession>"
 
   # Read and validate header (must have sample; and AT LEAST one of fq1 or srr)
   local hdr
@@ -122,6 +132,8 @@ run_ingest(){
 
     if [[ -n "$srr" ]]; then
       # --- SRA Download logic ---
+      command -v fasterq-dump >/dev/null 2>&1 && command -v pigz >/dev/null 2>&1 \
+        || _die "fasterq-dump/pigz missing in env_ingest; recreate it with: bin/main.sh env create ingest"
       echo "[ingest] $sample: downloading SRR $srr ..."
       local outdir="$ROOT/SRA/reads/$sample"
       _mkdirp "$outdir"
@@ -176,6 +188,9 @@ run_ingest(){
        _die "$sample: Neither fq1 nor srr provided"
     fi
 
+    # Replace any previous row for this sample so re-runs don't duplicate it
+    awk -F'\t' -v s="$sample" 'NR==1 || $1!=s' "$canon_path" > "$canon_path.tmp" && mv "$canon_path.tmp" "$canon_path"
+
     # Append to canonical manifest (fq2/norm2 may be empty)
     if [[ -n "${norm2:-}" ]]; then
       echo -e "${sample}\t${norm1}\t${norm2}" >> "$canon_path"
@@ -186,5 +201,6 @@ run_ingest(){
     echo "[ingest] ${sample} -> $(dirname "$norm1")"
   done
 
+  [[ -n "$SRR_ACC" ]] && rm -f "$FASTQ_MANIFEST"
   echo "[ingest] wrote canonical manifest: $canon_path"
 }

@@ -6,7 +6,7 @@ ts(){ date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 j(){ echo "{\"ts\":\"$(ts)\",\"module\":\"binning\",\"program\":\"COMEBin\",\"sample\":\"$SAMPLE\",\"msg\":\"$1\"}"; }
 
 # ── Inputs
-ROOT="${ROOT:-/media/Box/MeMaMoRe}"
+ROOT="${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 SAMPLE="${SAMPLE:?SAMPLE required}"
 THREADS="${THREADS:-}"
 PARAMS_YAML="${PARAMS_YAML:-}"

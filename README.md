@@ -236,16 +236,30 @@ Each module writes outputs in its own subfolder with `.done` markers to support 
 
 ---
 
-## **Testing (Synthetic Data)**
+## **Testing**
 
-Quick test run using internal mini dataset:
+### Unit tests and linting (run in CI)
 
 ```bash
-bin/main.sh run sim --set miniset
-bin/main.sh run plasmids --sample miniset
+pip install pytest shellcheck-py
+python -m pytest -q tests/unit
+git ls-files '*.sh' | xargs shellcheck -S error
 ```
 
-⚠ Simulation module partially implemented.
+### End-to-end test with ground truth
+
+`tests/e2e/run_e2e.sh` simulates reads from known references (`config/sim.yaml`, set `miniset`:
+*E. coli* K-12, *P. aeruginosa* PAO1, 3 plasmids, 3 phages, fixed seed), runs
+ingest → QC → assembly → binning → plasmids, aligns contigs and plasmid predictions back to the
+references and scores every plasmid tool (and their union) by precision, recall and F1.
+
+```bash
+tests/e2e/run_e2e.sh                      # full run
+tests/e2e/run_e2e.sh --skip-binning       # faster, without binning/GTDB-Tk
+```
+
+Results land in `tests/e2e/results/<set>/` (`metrics.tsv`, `mags.tsv`, `timings.tsv`,
+`versions.tsv`, one lockfile per environment). The run needs the module databases and is not part of CI.
 
 ---
 

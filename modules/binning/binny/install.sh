@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ROOT is your project root (adjust if needed)
-ROOT=${ROOT:-/media/Box/MeMaMoRe}
+# ROOT is the project root (defaults to the repo containing this script)
+ROOT="${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 BINNY_DIR="$ROOT/external/binny"
 
 TF="$BINNY_DIR/database/hmms/checkm_tf"

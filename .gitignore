@@ -42,3 +42,6 @@ external/*
 
 # --- Misc
 envs/*/env.lock
+
+# --- E2E test outputs
+tests/e2e/results/

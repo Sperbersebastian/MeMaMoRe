@@ -23,7 +23,7 @@ MM(){ micromamba -y -q "$@"; }
 # --- Pfade ---
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXTERNAL_DIR="$ROOT_DIR/external"
-REFDATA_BASE="${REFDATA_BASE:-/media/Box/MeMaMoRe/refdata}"
+REFDATA_BASE="${REFDATA_BASE:-$ROOT_DIR/refdata}"
 mkdir -p "$EXTERNAL_DIR" "$REFDATA_BASE"
 
 # --- Parameter ---
@@ -200,12 +200,12 @@ if [[ ! -d "$PLASME_DST" || -z "$(find "$PLASME_DST" -mindepth 1 -maxdepth 1 2>/
       python PLASMe_db.py --threads '$CPUS' || true
     fi
 
-    # 2) Fallback: Zenodo
-    python - <<'PY'
+    # 2) Fallback: Zenodo (test inside 'if' so set -e doesn't abort before it)
+    if ! python - <<'PY'
 import zipfile, os, sys
 sys.exit(0 if os.path.exists('DB.zip') and zipfile.is_zipfile('DB.zip') else 1)
 PY
-    if [[ \$? -ne 0 ]]; then
+    then
       echo '[plasme] upstream downloader failed, trying Zenodo'
       rm -f DB.zip
       ZURL=\"\${PLASME_ZENODO_URL:-https://zenodo.org/record/8046934/files/DB.zip?download=1}\"
@@ -213,11 +213,10 @@ PY
     fi
 
     # 3) Validate + unzip
-    python - <<'PY'
+    python - <<'PY' || { echo '[err] DB.zip invalid'; exit 2; }
 import zipfile, os, sys
 sys.exit(0 if os.path.exists('DB.zip') and zipfile.is_zipfile('DB.zip') else 1)
 PY
-    [[ \$? -eq 0 ]] || { echo '[err] DB.zip invalid'; exit 2; }
     unzip -q -o DB.zip -d .
   "
   rsync -a --delete "$EXTERNAL_DIR/PLASMe/DB/" "$PLASME_DST/"
@@ -232,11 +231,15 @@ echo "[ok] env plasme_env"
 
 
 # ========== 4) geNomad ==========
-create_if_missing genomad_env genomad hmmer prodigal-gv
+# geNomad <1.12 resolves to keras 3.x builds that crash in nn-classification
+create_if_missing genomad_env "genomad>=1.12" hmmer prodigal-gv
 micromamba run -n genomad_env bash -lc 'command -v genomad' >/dev/null
 gdst="$REFDATA_BASE/genomad"; mkdir -p "$gdst"
-if [[ ! -f "$gdst/genomad_db/version.txt" ]]; then
-  echo "[info] geNomad DB missing -> downloading to $gdst"
+# geNomad >=1.12 needs DB >=1.9; older DBs fail with "invalid literal for int()"
+gver="$(cat "$gdst/genomad_db/version.txt" 2>/dev/null || echo 0)"
+if [[ "$(printf '%s\n' 1.9 "$gver" | sort -V | head -n1)" != "1.9" ]]; then
+  echo "[info] geNomad DB missing or outdated (v$gver) -> downloading to $gdst"
+  rm -rf "$gdst/genomad_db"
   micromamba run -n genomad_env bash -lc "cd '$gdst' && genomad download-database ."
   [[ -f "$gdst/genomad_db/version.txt" ]] && \
     echo "[ok] genomad DB present at $gdst/genomad_db" || \

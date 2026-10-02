@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test tools
+        run: pip install pytest shellcheck-py flask
+
+      - name: Bash syntax
+        run: |
+          rc=0
+          for f in $(git ls-files '*.sh'); do bash -n "$f" || rc=1; done
+          exit $rc
+
+      - name: ShellCheck (errors)
+        run: git ls-files '*.sh' | xargs shellcheck -S error
+
+      - name: Python syntax
+        run: python -m py_compile gui/app.py scripts/*.py tests/e2e/evaluate.py
+
+      - name: Unit tests
+        run: python -m pytest -q tests/unit
