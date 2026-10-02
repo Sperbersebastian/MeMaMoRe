@@ -6,7 +6,7 @@ set -euo pipefail
 : "${READ_LEN:?READ_LEN not set}"
 : "${MODEL:?MODEL not set}"   # kept for compatibility, unused by ART
 : "${CPUS:=8}"                # unused by ART
-: "${SEED:=42}"               # unused by ART
+: "${SEED:=42}"               # ART base seed (per reference: SEED + index)
 
 # env helpers
 # shellcheck source=bin/lib/env.sh
@@ -63,7 +63,7 @@ grep "^>" "$COMBINED" | sed 's/^>//' | while read -r acc; do
 done
 
 # export vars for subshell
-export REFDIR ABUND_FILE N_READS READ_LEN
+export REFDIR ABUND_FILE N_READS READ_LEN SEED
 
 # ensure ART available
 run_in_env sim_env art_illumina --help >/dev/null 2>&1 || run_in_env sim_env micromamba install -y -n sim_env -c bioconda art
@@ -73,6 +73,7 @@ run_in_env sim_env bash -lc '
 set -euo pipefail
 OUT="$REFDIR/sim/metagenome"
 rm -f "${OUT}_R1.fastq" "${OUT}_R2.fastq" || true
+idx=0
 
 while read -r acc w; do
   [[ -z "${w:-}" || "$w" == "0.0" ]] && continue
@@ -90,7 +91,9 @@ while read -r acc w; do
   fold=$(awk -v n="$N_READS" -v L="$READ_LEN" -v w="$w" -v gs="$gs" \
          "BEGIN{printf \"%.6f\", (n*2*L*w)/gs}")
 
-  art_illumina -ss HS25 -na -p -l '"$READ_LEN"' -f "$fold" -m 300 -s 30 \
+  # fixed seed per reference so the same config always yields identical reads
+  idx=$((idx + 1))
+  art_illumina -ss HS25 -na -p -l '"$READ_LEN"' -f "$fold" -m 300 -s 30 -rs $((SEED + idx)) \
     -i "$f" -o "$OUT.$acc." >/dev/null
 done < "$ABUND_FILE"
 
