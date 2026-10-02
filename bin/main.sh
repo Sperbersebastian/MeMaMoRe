@@ -10,7 +10,6 @@ if [[ -z "${MAMBA_ROOT_PREFIX:-}" ]]; then
     export MAMBA_ROOT_PREFIX="$HOME/.local/share/mamba"
   else
     export MAMBA_ROOT_PREFIX="$HOME/micromamba"
-    export MAMBA_ROOT_PREFIX="$HOME/micromamba"
   fi
 fi
 export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -18,7 +17,6 @@ command -v micromamba >/dev/null 2>&1 || { echo "[env] micromamba not found at $
 eval "$(micromamba shell hook --shell=bash)"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-command -v micromamba >/dev/null || { echo "micromamba not found under $MAMBA_ROOT_PREFIX/bin"; exit 127; }
 export GTDBTK_DATA_PATH="${GTDBTK_DATA_PATH:-$ROOT/refdata/gtdbtk/release226}"
 
 FORCE_ENV_MODE="none"; FORCE_ENV_TARGET=""
@@ -28,8 +26,6 @@ declare -a SETS=(); declare -a ARGS=()
 usage(){ cat <<'USAGE'
 Usage:
   bin/main.sh list
-  bin/main.sh run <module|all> [--test|--resume|--force] [--from X] [--only X] [--sample ID] \
-                               [--set k=v ...] [--force-env[=all|<module>|<env>]]
   bin/main.sh run <module|all> [--test|--resume|--force] [--from X] [--only X] [--sample ID] \
                                [--set k=v ...] [--force-env[=all|<module>|<env>]]
   bin/main.sh env list
@@ -72,7 +68,6 @@ run_qc_wrap(){ ensure_env_by_module "qc"; local m p; m="$(mktemp)"; p="$(mktemp)
 run_assembly_wrap(){ ensure_env_by_module "assembly"; local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
   source "$ROOT/bin/modules/assembly.sh"; module_default_params > "$m"; merge "$p" "$m"
   export PARAMS_YAML="$p" ROOT MODE RESUME FORCE FROM ONLY SAMPLE
-  run_in_env "env_assembly_core" bash -lc 'source "$ROOT/bin/modules/assembly.sh"; run_assembly "$@"' _ "${ARGS[@]:-}"; }
   run_in_env "env_assembly_core" bash -lc 'source "$ROOT/bin/modules/assembly.sh"; run_assembly "$@"' _ "${ARGS[@]:-}"; }
 
 run_binning_wrap(){ ensure_env_by_module "binning"; local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
@@ -144,7 +139,7 @@ case "$cmd" in
     esac
     ;;
   plasmids_env)
-    "$ROOT/env/create_env_plasmids.sh"; exit 0
+    bash "$ROOT/envs/create_env_plasmids.sh"; exit 0
     ;;
   plasmids)
     while [[ $# -gt 0 ]]; do
@@ -184,7 +179,6 @@ case "$cmd" in
       case "$FORCE_ENV_TARGET" in
         ingest)    FORCE_ENV_TARGET="env_ingest" ;;
         qc)        FORCE_ENV_TARGET="env_qc" ;;
-        assembly)  FORCE_ENV_TARGET="env_assembly_core" ;;
         assembly)  FORCE_ENV_TARGET="env_assembly_core" ;;
         binning)   FORCE_ENV_TARGET="env_binning" ;;
         sra_tools) FORCE_ENV_TARGET="env_sra_tools" ;;
