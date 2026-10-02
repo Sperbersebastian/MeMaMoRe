@@ -23,7 +23,7 @@ MM(){ micromamba -y -q "$@"; }
 # --- Pfade ---
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXTERNAL_DIR="$ROOT_DIR/external"
-REFDATA_BASE="${REFDATA_BASE:-/media/Box/MeMaMoRe/refdata}"
+REFDATA_BASE="${REFDATA_BASE:-$ROOT_DIR/refdata}"
 mkdir -p "$EXTERNAL_DIR" "$REFDATA_BASE"
 
 # --- Parameter ---
