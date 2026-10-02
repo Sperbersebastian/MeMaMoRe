@@ -200,12 +200,12 @@ if [[ ! -d "$PLASME_DST" || -z "$(find "$PLASME_DST" -mindepth 1 -maxdepth 1 2>/
       python PLASMe_db.py --threads '$CPUS' || true
     fi
 
-    # 2) Fallback: Zenodo
-    python - <<'PY'
+    # 2) Fallback: Zenodo (test inside 'if' so set -e doesn't abort before it)
+    if ! python - <<'PY'
 import zipfile, os, sys
 sys.exit(0 if os.path.exists('DB.zip') and zipfile.is_zipfile('DB.zip') else 1)
 PY
-    if [[ \$? -ne 0 ]]; then
+    then
       echo '[plasme] upstream downloader failed, trying Zenodo'
       rm -f DB.zip
       ZURL=\"\${PLASME_ZENODO_URL:-https://zenodo.org/record/8046934/files/DB.zip?download=1}\"
@@ -213,11 +213,10 @@ PY
     fi
 
     # 3) Validate + unzip
-    python - <<'PY'
+    python - <<'PY' || { echo '[err] DB.zip invalid'; exit 2; }
 import zipfile, os, sys
 sys.exit(0 if os.path.exists('DB.zip') and zipfile.is_zipfile('DB.zip') else 1)
 PY
-    [[ \$? -eq 0 ]] || { echo '[err] DB.zip invalid'; exit 2; }
     unzip -q -o DB.zip -d .
   "
   rsync -a --delete "$EXTERNAL_DIR/PLASMe/DB/" "$PLASME_DST/"
