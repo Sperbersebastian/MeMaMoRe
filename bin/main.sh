@@ -127,7 +127,7 @@ env_remove(){ local target="${1:-}"; [[ -z "$target" ]] && { echo "[err] env rem
 cmd="${1:-}"; shift || true
 case "$cmd" in
   list)
-    ls -1 "$ROOT/bin/modules"/*.sh 2>/dev/null | xargs -n1 basename | sed 's/\.sh$//' || true
+    for f in "$ROOT/bin/modules"/*.sh; do [[ -e "$f" ]] && basename "$f" .sh; done
     ;;
   env)
     sub="${1:-}"; shift || true

@@ -46,12 +46,11 @@ _have_reads(){
 
 _need_bin(){
   case "$1" in
-    metaplasmidspades) echo ""metaplasmidspades.py"" ;;
+    metaplasmidspades) echo "metaplasmidspades.py" ;;
     viralverify|plasme|typing_hotspot) echo "python" ;;
     union_cluster|cluster|global_cluster) echo "perl" ;;
     genomad)     echo "genomad" ;;
     mobrecon)    echo "mob_recon" ;;
-    cluster)     echo "perl" ;;
     coverm)      echo "coverm" ;;
     typer)       echo "mob_typer" ;;
     *)           echo "" ;;
@@ -66,7 +65,7 @@ _env_for(){
     genomad)                echo "genomad_env" ;;
     mobrecon|typer)         echo "mobsuite_env" ;;
     cluster|global_cluster|union_cluster) echo "stampede_env" ;;
-    coverm|union_cluster)   echo "plasmids_core" ;;
+    coverm)                 echo "plasmids_core" ;;
     typing_hotspot)         echo "hotspot_env" ;;
     *)                      echo "plasmids_core" ;;
   esac
@@ -144,8 +143,8 @@ _global_cluster(){
     if [[ -n "$SAMPLES_FILE" && -r "$SAMPLES_FILE" ]]; then
       mapfile -t samples < <(grep -v '^\s*$' "$SAMPLES_FILE")
     else
-      samples=( $(find "$ROOT/SRA/plasmids" -maxdepth 2 -type d -name cluster -printf '%h\n' \
-                  | awk -F/ '{print $(NF)}' | grep -v '^_global$' | sort -u) )
+      mapfile -t samples < <(find "$ROOT/SRA/plasmids" -maxdepth 2 -type d -name cluster -printf '%h\n' \
+                  | awk -F/ '{print $(NF)}' | grep -v '^_global$' | sort -u)
     fi
 
     for s in "${samples[@]}"; do

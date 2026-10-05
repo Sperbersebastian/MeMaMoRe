@@ -68,11 +68,6 @@ def _module_status(sample):
     status = {}
     for mod in MODULES:
         mid = mod["id"]
-        # Check various done-file locations
-        done_paths = [
-            os.path.join(ROOT, "SRA", mid, sample, ".done"),
-            os.path.join(ROOT, "SRA", mid, sample),
-        ]
         # Module-specific done files
         if mid == "qc":
             done = os.path.join(ROOT, "SRA", "qc", "fastp", sample)

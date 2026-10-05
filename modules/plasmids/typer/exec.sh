@@ -25,6 +25,7 @@ DONE="$OUT/.done"
 OUTFILE="$OUT/mobtyper_results.txt"
 CMD=(mob_typer -i "$IN" -o "$OUTFILE" -n "$CPUS" --multi)
 [[ -n "$MOBS_DB" ]] && CMD+=(-d "$MOBS_DB")
+# shellcheck disable=SC2206  # extra args are intentionally word-split
 [[ -n "${MOB_TYPER_ARGS:-}" ]] && CMD+=(${MOB_TYPER_ARGS})
 
 echo "[mob_typer] ${CMD[*]}"

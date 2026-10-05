@@ -33,6 +33,7 @@ else
 fi
 
 cmd=( "$CMD" -f "$IN" -o "$OUT" --hmm "$VV_HMM" -t "$CPUS" --thr "$THR" -p )
+# shellcheck disable=SC2206  # extra args are intentionally word-split
 [[ -n "$EXTRA" ]] && cmd+=( $EXTRA )
 
 echo "[vv-virus] ${cmd[*]}"

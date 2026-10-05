@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n
+        run: |
+          fail=0
+          while IFS= read -r f; do bash -n "$f" || fail=1; done < <(git ls-files '*.sh')
+          exit $fail
+      - name: shellcheck
+        # SC2097/SC2098: VAR="$VAR" cmd is used on purpose to pass env vars
+        # SC2034/SC2155: unused vars / declare-and-assign, style only
+        run: |
+          git ls-files -z '*.sh' | xargs -0 shellcheck -S warning \
+            -e SC2034,SC2155,SC2097,SC2098
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install flask flake8
+      - name: py_compile
+        run: git ls-files -z '*.py' | xargs -0 python -m py_compile
+      - name: flake8 (errors only)
+        run: flake8 --select=E9,F63,F7,F82,F401,F841 gui scripts tests
+      - name: GUI smoke test
+        run: python tests/gui_smoke.py
