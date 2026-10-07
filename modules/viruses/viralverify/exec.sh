@@ -40,8 +40,9 @@ echo "[vv-virus] ${cmd[*]}"
 "${cmd[@]}"
 
 # Normalise virus outputs
-for f in "$OUT"/predicted_viruses.fasta "$OUT"/virus_contigs.fasta "$OUT"/viruses.fasta; do
-  [[ -s "$f" ]] && { ln -sf "$(basename "$f")" "$OUT/viralverify_viruses.fasta"; break; }
+# viralVerify writes Prediction_results_fasta/<input>_virus.fasta (older names kept as fallback)
+for f in "$OUT"/Prediction_results_fasta/*_virus.fasta "$OUT"/predicted_viruses.fasta "$OUT"/virus_contigs.fasta "$OUT"/viruses.fasta; do
+  [[ -s "$f" ]] && { ln -sf "${f#"$OUT"/}" "$OUT/viralverify_viruses.fasta"; break; }
 done
 
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"

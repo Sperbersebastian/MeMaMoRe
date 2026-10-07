@@ -17,6 +17,8 @@ if [[ "$MODE" == "sample" ]]; then
 fi
 CPUS="${CPUS:-16}"
 FORCE="${FORCE:-0}"
+# metaplasmidspades/exec.sh only runs when called from this orchestrator
+export MODULE_CONTEXT="plasmids"
 FORCE_ENV="${FORCE_ENV:-${force_env:-${forece_env:-}}}"
 RUN_COVERM_AFTER_GLOBAL="${RUN_COVERM_AFTER_GLOBAL:-0}"
 SAMPLES_FILE="${SAMPLES_FILE:-}"

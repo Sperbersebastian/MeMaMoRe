@@ -364,7 +364,7 @@ def api_results(sample, module):
         magscot_path = os.path.join(ROOT, "SRA", "binning", "magscot", sample, "contigs_to_bin.tsv")
         results["magscot"] = _read_tsv(magscot_path)
         # CheckM2 quality stats
-        checkm2_path = os.path.join(ROOT, "SRA", "binning", "qc_checkm2", sample, "quality_report.tsv")
+        checkm2_path = os.path.join(ROOT, "SRA", "binning", "checkm2", sample, "quality_report.tsv")
         results["checkm2"] = _read_tsv(checkm2_path)
     return jsonify(results)
 
@@ -419,8 +419,8 @@ def api_delete_sample(name):
     for sub in ["qc/fastp", "qc/fastqc", "assemblies/spades", "assemblies/contig_qc",
                 "viruses", "args", "plasmids", "reads",
                 "binning/comebin", "binning/binny", "binning/metabat2",
-                "binning/magscot", "binning/qc_checkm2", "binning/coverage",
-                "binning/gtdbtk", "binning/qc_rrna_trna"]:
+                "binning/magscot", "binning/checkm2", "binning/coverage",
+                "binning/gtdbtk", "binning/barrnap", "binning/trnascan"]:
         d = _safe_sra_path(sub, name)
         if os.path.isdir(d) and not os.path.islink(d):
             shutil.rmtree(d)
@@ -434,7 +434,7 @@ def api_disk(sample):
     for sub in ["qc/fastp", "qc/fastqc", "assemblies/spades", "assemblies/contig_qc",
                 "viruses", "args", "plasmids", "reads",
                 "binning/comebin", "binning/binny", "binning/metabat2",
-                "binning/magscot", "binning/qc_checkm2"]:
+                "binning/magscot", "binning/checkm2"]:
         d = os.path.join(ROOT, "SRA", sub, sample)
         if os.path.isdir(d):
             for dirpath, dirnames, filenames in os.walk(d):
