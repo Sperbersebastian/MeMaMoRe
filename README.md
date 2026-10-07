@@ -247,6 +247,22 @@ bin/main.sh run plasmids --sample miniset
 
 ⚠ Simulation module partially implemented.
 
+### Stub run (no environments, no databases)
+
+`tests/stub/run.sh` runs the whole chain (ingest → qc → assembly → binning →
+plasmids → viruses → args) in a few seconds with fake tools that write
+correctly named outputs. It exercises the module scripts, the `.done`
+bookkeeping and the GUI, not the tools themselves. It works in a throwaway
+directory (`STUB_WORK`, default: a new temp dir) and never touches `SRA/` or
+`refdata/`. Needs `python3` with PyYAML and `gawk`; the GUI check needs Flask.
+
+```bash
+STUB_WORK=/tmp/memamo_stub tests/stub/run.sh            # or: tests/stub/run.sh qc assembly
+python3 tests/stub/check_gui.py /tmp/memamo_stub        # GUI API shows results per module
+```
+
+CI (`.github/workflows/ci.yml`) runs this on every push/PR.
+
 ---
 
 ## **Development Notes**
