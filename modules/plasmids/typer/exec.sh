@@ -25,6 +25,7 @@ DONE="$OUT/.done"
 OUTFILE="$OUT/mobtyper_results.txt"
 CMD=(mob_typer -i "$IN" -o "$OUTFILE" -n "$CPUS" --multi)
 [[ -n "$MOBS_DB" ]] && CMD+=(-d "$MOBS_DB")
+# shellcheck disable=SC2206  # extra args are intentionally word-split
 [[ -n "${MOB_TYPER_ARGS:-}" ]] && CMD+=(${MOB_TYPER_ARGS})
 
 echo "[mob_typer] ${CMD[*]}"
@@ -39,7 +40,7 @@ if [[ "$GENOMAD_ON_CLUSTERED" == "1" ]]; then
   if [[ -n "$GENOMAD_DB" ]]; then
     GOUT="$OUT/genomad_on_derep"; mkdir -p "$GOUT"
     echo "[genomad] end-to-end on dereplicated plasmids"
-    micromamba run -n genomad_env genomad end-to-end "$IN" "$GOUT" "$GENOMAD_DB" --threads "$CPUS"
+    micromamba run -n genomad_env genomad end-to-end "$IN" "$GOUT" "$GENOMAD_DB" --threads "$CPUS" ${GENOMAD_SPLITS:+--splits "$GENOMAD_SPLITS"}
   else
     echo "[genomad] DB missing at $GENOMAD_DB_DEFAULT -> skip"
   fi

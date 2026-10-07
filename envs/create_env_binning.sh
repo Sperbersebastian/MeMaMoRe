@@ -13,7 +13,7 @@ eval "$(micromamba shell hook --shell=bash)"
 # -----------------------------
 # Paths & constants
 # -----------------------------
-ROOT="${ROOT:-/media/Box/MeMaMoRe}"
+ROOT="${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ENV_NAME="env_binning"
 COMEBIN_ENV="comebin_env"
 

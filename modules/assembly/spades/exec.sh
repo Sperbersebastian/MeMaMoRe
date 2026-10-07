@@ -6,7 +6,7 @@ OUTDIR="$ROOT/SRA/assemblies/spades/$SAMPLE"
 LOGS="$ROOT/logs"
 EVENTS="$ROOT/api/status.jsonl"
 mkdir -p "$OUTDIR" "$LOGS"
-[[ "${FORCE:-0}" == "1" ]] && rm -rf "$OUTDIR"/*
+[[ "${FORCE:-0}" == "1" ]] && rm -rf "${OUTDIR:?}"/*
 
 ts(){ date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 echo "{\"ts\":\"$(ts)\",\"module\":\"assembly\",\"program\":\"spades\",\"sample\":\"$SAMPLE\",\"phase\":\"start\"}" >> "$EVENTS"

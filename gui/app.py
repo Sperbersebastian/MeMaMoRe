@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """MeMaMoRe Web GUI – Flask backend."""
-import json, os, subprocess, threading, time, glob, csv, signal, shutil
+import json, os, re, subprocess, threading, time, glob, csv, signal, shutil
 from pathlib import Path
-from flask import Flask, render_template, jsonify, request, Response
+from flask import Flask, render_template, jsonify, request, Response, abort
 
 app = Flask(__name__)
 ROOT = os.environ.get("MEMAMO_ROOT", str(Path(__file__).resolve().parent.parent))
@@ -22,6 +22,35 @@ MODULES = [
     {"id": "args",     "name": "ARGs",     "desc": "Resistance gene detection"},
 ]
 
+MODULE_IDS = {m["id"] for m in MODULES}
+
+# ── input validation ──────────────────────────────────────────────────────────
+# Sample names end up in filesystem paths (and rmtree), so only allow a safe
+# charset; the leading alnum rules out "." and "..".
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+def _valid_name(name):
+    return isinstance(name, str) and bool(_NAME_RE.match(name))
+
+def _safe_sra_path(*parts):
+    """Join parts under ROOT/SRA and refuse anything that escapes it."""
+    base = os.path.realpath(os.path.join(ROOT, "SRA"))
+    path = os.path.realpath(os.path.join(base, *parts))
+    if os.path.commonpath([base, path]) != base or path == base:
+        abort(400, description="Invalid path")
+    return path
+
+@app.before_request
+def _validate_path_args():
+    for key in ("sample", "name"):
+        val = (request.view_args or {}).get(key)
+        if val is not None and not _valid_name(val):
+            abort(400, description=f"Invalid {key}")
+
+@app.errorhandler(400)
+def _bad_request(e):
+    return jsonify({"error": e.description}), 400
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 def _samples():
     """Discover samples from SRA subdirectories."""
@@ -39,11 +68,6 @@ def _module_status(sample):
     status = {}
     for mod in MODULES:
         mid = mod["id"]
-        # Check various done-file locations
-        done_paths = [
-            os.path.join(ROOT, "SRA", mid, sample, ".done"),
-            os.path.join(ROOT, "SRA", mid, sample),
-        ]
         # Module-specific done files
         if mid == "qc":
             done = os.path.join(ROOT, "SRA", "qc", "fastp", sample)
@@ -132,7 +156,7 @@ def api_status(sample):
 @app.route("/api/run", methods=["POST"])
 def api_run():
     global _job_id
-    data = request.json
+    data = request.get_json(silent=True) or {}
     sample = data.get("sample", "")
     samples_list = data.get("samples", [])  # multi-sample support
     modules = data.get("modules", [])
@@ -143,6 +167,18 @@ def api_run():
         return jsonify({"error": "No sample specified"}), 400
     if not modules:
         return jsonify({"error": "No modules selected"}), 400
+    if not isinstance(modules, list) or any(m not in MODULE_IDS for m in modules):
+        return jsonify({"error": "Unknown module"}), 400
+    if sample and sample != "ALL" and not _valid_name(sample):
+        return jsonify({"error": "Invalid sample name"}), 400
+    if not isinstance(samples_list, list) or not all(_valid_name(s) for s in samples_list):
+        return jsonify({"error": "Invalid sample name"}), 400
+    try:
+        cpus = int(cpus)
+    except (TypeError, ValueError):
+        return jsonify({"error": "cpus must be an integer"}), 400
+    if not 1 <= cpus <= 1024:
+        return jsonify({"error": "cpus out of range"}), 400
 
     if samples_list:
         target_samples = samples_list
@@ -321,13 +357,14 @@ def api_results(sample, module):
     elif module == "plasmids":
         mobrecon_path = os.path.join(ROOT, "SRA", "plasmids", sample, "mobrecon", "mobtyper_results.txt")
         results["mobrecon"] = _read_tsv(mobrecon_path)
-        genomad_path = os.path.join(ROOT, "SRA", "plasmids", sample, "genomad", f"{sample}_summary", f"{sample}_plasmid_summary.tsv")
-        results["genomad"] = _read_tsv(genomad_path)
+        # geNomad names outputs after the input file (contigs_summary/contigs_plasmid_summary.tsv)
+        hits = glob.glob(os.path.join(ROOT, "SRA", "plasmids", sample, "genomad", "*_summary", "*_plasmid_summary.tsv"))
+        results["genomad"] = _read_tsv(hits[0]) if hits else []
     elif module == "binning":
         magscot_path = os.path.join(ROOT, "SRA", "binning", "magscot", sample, "contigs_to_bin.tsv")
         results["magscot"] = _read_tsv(magscot_path)
         # CheckM2 quality stats
-        checkm2_path = os.path.join(ROOT, "SRA", "binning", "qc_checkm2", sample, "quality_report.tsv")
+        checkm2_path = os.path.join(ROOT, "SRA", "binning", "checkm2", sample, "quality_report.tsv")
         results["checkm2"] = _read_tsv(checkm2_path)
     return jsonify(results)
 
@@ -335,6 +372,8 @@ def api_results(sample, module):
 def api_logs_stream(sample):
     """SSE stream of log file."""
     module = request.args.get("module", "")
+    if module and module not in MODULE_IDS:
+        return jsonify({"error": "Unknown module"}), 400
     if module:
         log_path = os.path.join(ROOT, "logs", f"gui_{module}_{sample}.log")
         if not os.path.isfile(log_path):
@@ -380,10 +419,10 @@ def api_delete_sample(name):
     for sub in ["qc/fastp", "qc/fastqc", "assemblies/spades", "assemblies/contig_qc",
                 "viruses", "args", "plasmids", "reads",
                 "binning/comebin", "binning/binny", "binning/metabat2",
-                "binning/magscot", "binning/qc_checkm2", "binning/coverage",
-                "binning/gtdbtk", "binning/qc_rrna_trna"]:
-        d = os.path.join(ROOT, "SRA", sub, name)
-        if os.path.isdir(d):
+                "binning/magscot", "binning/checkm2", "binning/coverage",
+                "binning/gtdbtk", "binning/barrnap", "binning/trnascan"]:
+        d = _safe_sra_path(sub, name)
+        if os.path.isdir(d) and not os.path.islink(d):
             shutil.rmtree(d)
             removed.append(sub)
     return jsonify({"ok": True, "sample": name, "removed": removed})
@@ -395,7 +434,7 @@ def api_disk(sample):
     for sub in ["qc/fastp", "qc/fastqc", "assemblies/spades", "assemblies/contig_qc",
                 "viruses", "args", "plasmids", "reads",
                 "binning/comebin", "binning/binny", "binning/metabat2",
-                "binning/magscot", "binning/qc_checkm2"]:
+                "binning/magscot", "binning/checkm2"]:
         d = os.path.join(ROOT, "SRA", sub, sample)
         if os.path.isdir(d):
             for dirpath, dirnames, filenames in os.walk(d):
@@ -425,6 +464,8 @@ def api_add_sample():
         file_obj = request.files.get("file")
         if not sample_name or not file_obj:
             return jsonify({"error": "Sample name and file required"}), 400
+        if not _valid_name(sample_name):
+            return jsonify({"error": "Invalid sample name (allowed: A-Z a-z 0-9 . _ -)"}), 400
 
         # Create base dirs
         for d in ["qc/fastp", "assemblies/spades", "viruses", "args", "plasmids"]:
@@ -437,13 +478,15 @@ def api_add_sample():
 
         return jsonify({"ok": True, "sample": sample_name, "note": "FASTA uploaded. Ready for Binning/Viruses."})
 
-    data = request.json
-    sample_name = data.get("name", "").strip()
+    data = request.get_json(silent=True) or {}
+    sample_name = str(data.get("name", "")).strip()
     source_type = data.get("type", "")  # "sra" or "local"
-    source_value = data.get("value", "").strip()
+    source_value = str(data.get("value", "")).strip()
 
     if not sample_name:
         return jsonify({"error": "Sample name required"}), 400
+    if not _valid_name(sample_name):
+        return jsonify({"error": "Invalid sample name (allowed: A-Z a-z 0-9 . _ -)"}), 400
 
     if source_type == "local":
         # Just create the sample directory structure
@@ -452,6 +495,8 @@ def api_add_sample():
         return jsonify({"ok": True, "sample": sample_name, "note": "Directories created. Run ingest to import data."})
 
     elif source_type == "sra":
+        if not re.match(r"^[A-Za-z0-9]+$", source_value):
+            return jsonify({"error": "Invalid SRA accession"}), 400
         # Launch ingest with --srr
         cmd = [os.path.join(ROOT, "bin", "main.sh"), "run", "ingest",
                "--sample", sample_name, "--srr", source_value]
@@ -481,5 +526,8 @@ if __name__ == "__main__":
     ROOT = args.root
     os.environ["MEMAMO_ROOT"] = ROOT
     print(f"[MeMaMoRe GUI] ROOT={ROOT}")
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print("[MeMaMoRe GUI] WARNING: listening on a non-local address. The GUI has no "
+              "authentication; anyone who can reach this port can start jobs and delete samples.")
     print(f"[MeMaMoRe GUI] http://{args.host}:{args.port}")
     app.run(host=args.host, port=args.port, debug=False, threaded=True)

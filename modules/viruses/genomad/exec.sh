@@ -19,7 +19,8 @@ if [[ -d "$PLASMID_GENOMAD" ]]; then
     [[ -e "$f" ]] && ln -sf "$f" "$OUT/$(basename "$f")"
   done
   # Also link the summary output directory if it exists
-  for d in "$PLASMID_GENOMAD"/*_find; do
+  # *_summary holds contigs_virus_summary.tsv (read by the GUI)
+  for d in "$PLASMID_GENOMAD"/*_find "$PLASMID_GENOMAD"/*_summary; do
     [[ -d "$d" ]] && ln -sfn "$d" "$OUT/$(basename "$d")"
   done
   date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"
@@ -50,6 +51,8 @@ if [[ ! -f "$DB/version.txt" ]]; then
 fi
 
 cmd=( genomad end-to-end "$IN" "$OUT" "$DB" --threads "$CPUS" )
+# GENOMAD_SPLITS>0 lowers MMseqs2 RAM use (needed on machines with <~20 GB RAM)
+[[ "${GENOMAD_SPLITS:-0}" -gt 0 ]] && cmd+=( --splits "$GENOMAD_SPLITS" )
 echo "[genomad-virus] ${cmd[*]}"
 "${cmd[@]}"
 

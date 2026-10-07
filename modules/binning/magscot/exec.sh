@@ -57,7 +57,7 @@ CB_MAP="$MAPDIR/comebin.with_set.tsv"
 # Symlink oder on-the-fly Build (Tool-Ordner bleiben unangetastet)
 if   [[ -s "$MB_EXIST_1" ]]; then ln -sf "$MB_EXIST_1" "$MB_MAP"
 elif [[ -s "$MB_EXIST_2" ]]; then ln -sf "$MB_EXIST_2" "$MB_MAP"
-else mk_map_from_bins "$MB_DIR" "*.fa*" "metabat2" "$MB_MAP"; fi
+else mk_map_from_bins "$MB_DIR" "bin.*.fa" "metabat2" "$MB_MAP"; fi
 
 if   [[ -s "$BN_EXIST_1" ]]; then ln -sf "$BN_EXIST_1" "$BN_MAP"
 elif [[ -s "$BN_EXIST_2" ]]; then ln -sf "$BN_EXIST_2" "$BN_MAP"
@@ -131,10 +131,25 @@ if [[ ! -s "$HMM_MAP" ]]; then
 fi
 
 INPUT_FOR_MAGS="$RAW_NORM"
-if [[ ! -d "$OUT/MAGScoT" || -z "$(ls -A "$OUT/MAGScoT" 2>/dev/null)" ]]; then
+# MAGScoT writes <prefix>.refined.contig_to_bin.out (binnew \t contig), <prefix>.refined.out, <prefix>.scores.out
+REFINED="$OUT/MAGScoT.refined.contig_to_bin.out"
+if [[ ! -s "$REFINED" ]]; then
   micromamba run -n env_binning Rscript "$SCRIPT" -i "$INPUT_FOR_MAGS" --hmm "$HMM_MAP" -o "$OUT/MAGScoT"
 else
-  echo "[magscot] skip Rscript, results exist in $OUT/MAGScoT"
+  echo "[magscot] skip Rscript, results exist: $REFINED"
 fi
+[[ -s "$REFINED" ]] || { echo "[magscot] no refined bins ($REFINED missing)"; exit 0; }
+
+# ---------- refined bins -> bins/<bin>.fa (input for CheckM2, barrnap/tRNAscan, GTDB-Tk) ----------
+BINS_DIR="$OUT/bins"
+rm -rf "$BINS_DIR"; mkdir -p "$BINS_DIR"
+awk -v dir="$BINS_DIR" '
+  FNR==NR { if (FNR>1 && NF>=2) bin[$2]=$1; next }
+  /^>/    { id=substr($1,2); out=(id in bin) ? dir "/" bin[id] ".fa" : ""; if (out!="") print > out; next }
+  out!="" { print > out }
+' "$REFINED" "$CONTIGS"
+# refined contig->bin table for the GUI
+awk 'BEGIN{OFS="\t"; print "contig","bin"} NR>1 && NF>=2 {print $2,$1}' "$REFINED" > "$OUT/contigs_to_bin.tsv"
+echo "[magscot] $(find "$BINS_DIR" -name '*.fa' | wc -l) refined bins -> $BINS_DIR"
 
 echo "[magscot] done → $OUT"
