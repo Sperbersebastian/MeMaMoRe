@@ -58,6 +58,11 @@ if [[ ! -s "$RAW" ]]; then
     [[ -n "${pf:-}" ]] && awk -v p="plasme" '/^>/{sub(/^>/,">"p"|")}1' "$pf" >> "$tmp"
   fi
 
+  # Plasmer (optional 5th predictor; absent when skipped for RAM)
+  if [[ -s "$BASE/plasmer/results/${SAMPLE}.plasmer.predPlasmids.fa" ]]; then
+    awk -v p="plasmer" '/^>/{sub(/^>/,">"p"|")}1' "$BASE/plasmer/results/${SAMPLE}.plasmer.predPlasmids.fa" >> "$tmp"
+  fi
+
   # MOB-recon
   for f in "$BASE"/mobrecon/*reconstructed*.fasta "$BASE"/mobrecon/*plasmid*.fasta; do
     if [[ -s "$f" ]]; then awk -v p="mobrecon" '/^>/{sub(/^>/,">"p"|")}1' "$f" >> "$tmp"; fi

@@ -71,6 +71,7 @@ _env_name(){
     plasme)                 echo "plasme_env" ;;
     genomad)                echo "genomad_env" ;;
     mobrecon)               echo "mobsuite_env" ;;
+    plasmer)                echo "plasmer_env" ;;
     union_cluster)          echo "plasmids_core" ;;
     typing_hotspot)         echo "hotspot_env" ;;
     typer)                  echo "mobsuite_env" ;;
@@ -170,7 +171,7 @@ _recreate_env(){
 # =========================
 list_env_specs(){
   for m in ingest qc assembly binning sra_tools sim mapping_coverm coverm plasmids \
-           viralverify plasme genomad mobrecon typer cluster union_cluster typing_hotspot \
+           viralverify plasme genomad mobrecon plasmer typer cluster union_cluster typing_hotspot \
            viruses virsorter2 vibrant checkv iphop \
            args deeparg rgi amrplusplus abricate summary_args; do
     local env create

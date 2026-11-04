@@ -24,7 +24,7 @@ for d in bin modules envs config scripts gui; do ln -sfn "$REPO/$d" "$WORK/$d"; 
 export STUB_PYTHON="${STUB_PYTHON:-$(command -v python3)}"
 export MAMBA_ROOT_PREFIX="$STUB"          # main.sh/env.sh prepend $MAMBA_ROOT_PREFIX/bin
 export PATH="$STUB/bin:/usr/local/bin:/usr/bin:/bin"
-export MEMAMO_STUB=1 CPUS="${CPUS:-2}" GTDBTK_FORCE=1   # stub: exercise GTDB-Tk regardless of RAM
+export MEMAMO_STUB=1 CPUS="${CPUS:-2}" GTDBTK_FORCE=1 PLASMER_FORCE=1   # stub: exercise RAM-gated steps
 # comma-decimal locale (if installed) so CI catches awk/sort number parsing bugs
 locale -a 2>/dev/null | grep -qi '^de_DE.utf' && export LC_ALL='' LANG=de_DE.UTF-8 LC_NUMERIC=de_DE.UTF-8
 unset ROOT GTDBTK_DATA_PATH REFDATA_BASE VIBRANT_DB
@@ -46,6 +46,7 @@ fake refdata/viralverify/pfam/Pfam-A.hmm
 fake refdata/genomad/genomad_db/version.txt
 mkdir -p "$WORK/refdata/iphop/Aug_2023_pub_rw"
 fake refdata/gunc/gunc_db_progenomes2.1.dmnd
+fake refdata/plasmer/.extracted
 fake refdata/virsorter2/db/Done_all_setup
 for h in Pfam-A_v32 KEGG_profiles_prokaryotes VOGDB94_phage; do for x in h3f h3i h3m h3p; do fake "refdata/vibrant/db/databases/$h.HMM.$x"; done; done
 fake refdata/vibrant/db/files/VIBRANT_names.tsv

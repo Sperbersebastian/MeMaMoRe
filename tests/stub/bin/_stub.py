@@ -785,6 +785,18 @@ def hostile():
                                   "reads_removed_proportion": 0.0}]) + "\n")
 
 
+
+def plasmer():
+    """Plasmer -g IN -p PFX -d DB -t N -m MIN -o OUT -> OUT/results/PFX.plasmer.*"""
+    fa, pfx, out = opt("-g", "--genome"), opt("-p", "--prefix", default="output"), opt("-o", "--outpath")
+    res = mkdir(Path(out) / "results")
+    pl = [(c, s_) for c, s_ in records(fa) if kind_of(c) == "plasmid"]
+    write_fasta(res / f"{pfx}.plasmer.predPlasmids.fa", pl)
+    write(res / f"{pfx}.plasmer.predClass.tsv", "".join(
+        f"{c}\t{'plasmid' if kind_of(c) == 'plasmid' else 'chromosome'}\n" for c, _ in records(fa)))
+    write(res / f"{pfx}.plasmer.predProb.tsv", "".join(f"{c}\t0.97\t0.03\n" for c, _ in pl))
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -798,7 +810,7 @@ HANDLERS = {
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
-    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile,
+    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer,
 }
 
 if __name__ == "__main__":
