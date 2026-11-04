@@ -39,6 +39,11 @@ modules:
     ani: 0.95                   # secondary clustering ANI (species level)
     min_completeness: 50        # CheckM2, passed to dRep via --genomeInfo
     max_contamination: 10
+  hosts:
+    # plasmid host by abundance correlation (run catalog): plasmid clusters x catalog MAGs
+    min_samples: 6              # fewer samples: no correlation (note in plasmid_hosts.tsv)
+    min_rho: 0.7                # Spearman rho
+    max_p: 0.05                 # permutation p-value
   plasmids:
     # union: every candidate of any predictor (default, previous behaviour)
     # min2 / min3: candidates confirmed by >= 2 / 3 predictors, i.e. covered over

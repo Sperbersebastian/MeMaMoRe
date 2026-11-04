@@ -94,7 +94,10 @@ for m in "${MODULES[@]}"; do
   esac
 done
 echo "[stub] ===== catalog ====="
-if [[ " ${MODULES[*]} " == *" binning "* ]]; then "$WORK/bin/main.sh" run catalog "${SETS[@]}"; fi
+if [[ " ${MODULES[*]} " == *" binning "* ]]; then
+  # min_samples=2 so the stub (2 samples) also runs the host-correlation code
+  "$WORK/bin/main.sh" run catalog "${SETS[@]}" --set modules.hosts.min_samples=2
+fi
 echo "[stub] ===== summary ====="
 "$WORK/bin/main.sh" summary
 echo "[stub] all modules finished: ${MODULES[*]}"

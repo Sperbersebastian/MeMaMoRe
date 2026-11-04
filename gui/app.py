@@ -432,6 +432,7 @@ SUMMARY_FILES = {
     "overview": "samples_overview.tsv", "mags": "mags.tsv", "viruses": "viruses.tsv",
     "args_matrix": "args_matrix.tsv", "virulence_matrix": "virulence_matrix.tsv",
     "replicons_matrix": "replicons_matrix.tsv", "mag_catalog": "mag_catalog.tsv",
+    "plasmid_hosts": "plasmid_hosts.tsv",
 }
 
 @app.route("/api/summary")

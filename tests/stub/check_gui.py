@@ -51,6 +51,8 @@ if r.status_code != 200:
 summ = c.get("/api/summary").get_json() or {}
 if not any(row.get("sample") == sample for row in summ.get("overview", [])):
     fail.append("/api/summary overview has no row for the sample")
+if not summ.get("plasmid_hosts"):
+    fail.append("/api/summary: plasmid_hosts empty")
 if not summ.get("mag_catalog"):
     fail.append("/api/summary: mag_catalog empty (run catalog)")
 print(f"summary   overview={len(summ.get('overview', []))}, mags={len(summ.get('mags', []))}, "

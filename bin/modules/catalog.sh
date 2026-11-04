@@ -6,6 +6,8 @@
 #   3) CoverM genome: abundance of every catalog genome in every sample
 #      (one read mapping per sample against the catalog)
 #   4) SRA/summary/mag_catalog.tsv (+ SRA/catalog/ working dir)
+#   5) SRA/summary/plasmid_hosts.tsv: HOTSPOT next to the abundance-correlated
+#      catalog genome (Spearman over samples; needs modules.hosts.min_samples)
 # Runs inside drep_env (dRep, skani, CoverM).
 set -euo pipefail
 : "${ROOT:?}"
@@ -67,3 +69,23 @@ done
 
 # ---- 4) table ----
 python3 "$ROOT/scripts/mag_catalog.py" "$ROOT" "$OUT" "${SAMPLES[@]}"
+
+# ---- 5) plasmid hosts: abundance of the global plasmid clusters per sample and
+#         Spearman correlation with the catalog genomes (next to HOTSPOT) ----
+MIN_SAMPLES="$(cfg modules.hosts.min_samples 6)"
+GPL="$ROOT/SRA/plasmids/_global/cluster/plasmids_derep.global.fasta"
+PA="$OUT/plasmid_abundance"; mkdir -p "$PA"
+if [[ -s "$GPL" && ${#SAMPLES[@]} -ge "$MIN_SAMPLES" ]]; then
+  for s in "${SAMPLES[@]}"; do
+    rr="$(qc_reads "$s")" || continue
+    IFS=$'\t' read -r R1 R2 <<<"$rr"
+    [[ -s "$R1" ]] || continue
+    reads=(-1 "$R1"); [[ -n "$R2" ]] && reads+=(-2 "$R2"); [[ -n "$R2" ]] || reads=(--single "$R1")
+    coverm contig "${reads[@]}" --reference "$GPL" --methods tpm mean covered_fraction -t "$CPUS" \
+      -o "$PA/$s.tsv" >>"$LOG" 2>&1
+  done
+elif [[ -s "$GPL" ]]; then
+  echo "[hosts] ${#SAMPLES[@]} sample(s) < modules.hosts.min_samples=$MIN_SAMPLES: no abundance correlation"
+fi
+python3 "$ROOT/scripts/plasmid_hosts.py" "$ROOT" "$OUT" "$MIN_SAMPLES" \
+  "$(cfg modules.hosts.min_rho 0.7)" "$(cfg modules.hosts.max_p 0.05)" "${SAMPLES[@]}"
