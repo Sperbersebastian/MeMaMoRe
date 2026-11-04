@@ -37,6 +37,7 @@ _run_step(){
     genomad)          env_name="genomad_env" ;;
     virsorter2)       env_name="virsorter2_env" ;;
     vibrant)          env_name="vibrant_env" ;;
+    deepvirfinder)    env_name="dvf_env" ;;
     union_virus)      env_name="plasmids_core" ;;
     checkv)           env_name="checkv_env" ;;
     iphop)            env_name="iphop_env" ;;
@@ -58,7 +59,7 @@ echo "[viruses] START sample=$SAMPLE cpus=$CPUS force=$FORCE host=$(hostname)"
 
 # verify scripts exist
 [[ -x "$ASM_MOD" ]] || { echo "[error] missing: $ASM_MOD"; exit 1; }
-for s in viralverify genomad virsorter2 vibrant union checkv; do
+for s in viralverify genomad virsorter2 vibrant deepvirfinder union checkv; do
   [[ -x "$MOD/$s/exec.sh" ]] || { echo "[error] missing: $MOD/$s/exec.sh"; exit 1; }
 done
 
@@ -73,6 +74,13 @@ _run_step "genomad"         "$MOD/genomad/exec.sh"      "$SAMPLE"
 _run_step "virsorter2"      "$MOD/virsorter2/exec.sh"   "$SAMPLE"
 # 4) VIBRANT
 _run_step "vibrant"         "$MOD/vibrant/exec.sh"      "$SAMPLE"
+# 4b) DeepVirFinder (5th predictor; modules.viruses.deepvirfinder: false switches it off)
+_dvf_on="$(bash -c 'source "$ROOT/bin/lib/cfg.sh"; cfg modules.viruses.deepvirfinder true')"
+if [[ "$_dvf_on" =~ ^(false|False|0|no)$ ]]; then
+  echo "[skip] $SAMPLE :: deepvirfinder (modules.viruses.deepvirfinder: false)"
+else
+  _run_step "deepvirfinder" "$MOD/deepvirfinder/exec.sh" "$SAMPLE"
+fi
 # 5) union + dedup
 _run_step "union_virus"     "$MOD/union/exec.sh"        "$SAMPLE"
 # 6) CheckV quality

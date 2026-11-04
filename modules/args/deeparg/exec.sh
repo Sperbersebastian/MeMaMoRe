@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # modules/args/deeparg/exec.sh
-# Run DeepARG on multiple genomic contexts: contigs, MAGs, plasmids, viruses
+# Run DeepARG (LS model) once on the central gene calls (genes.ffn)
 # Usage: exec.sh ROOT SAMPLE [CPUS] [FORCE]
 set -euo pipefail
 
@@ -16,98 +16,39 @@ command -v deeparg >/dev/null 2>&1 || { echo "[deeparg] deeparg not in PATH"; ex
 # Auto-download DeepARG model/database on first run
 DEEPARG_DATA="${DEEPARG_DATA:-$ROOT/refdata/deeparg}"
 export DEEPARG_DATA
-if [[ ! -d "$DEEPARG_DATA" || ! -f "$DEEPARG_DATA/model/v2/metadata.pkl" ]]; then
+# DeepARG ships model/v2/{model,metadata}_{LS,SS}.pkl (there is no plain metadata.pkl;
+# checking for it re-downloaded the 1.9 GB data on every run)
+if [[ ! -s "$DEEPARG_DATA/model/v2/metadata_LS.pkl" || ! -s "$DEEPARG_DATA/model/v2/model_LS.pkl" ]]; then
   echo "[deeparg] downloading model & database -> $DEEPARG_DATA"
   mkdir -p "$DEEPARG_DATA"
   deeparg download_data -o "$DEEPARG_DATA" || { echo "[deeparg] DB download failed"; exit 5; }
 fi
 
-# ---- helper: run DeepARG on one FASTA ----
-_run_deeparg() {
-  local fasta="$1" context="$2" label="$3"
-  [[ -s "$fasta" ]] || { echo "[deeparg] skip $context/$label (empty/missing)"; return 0; }
+# ---- input: central gene calls (DeepARG-LS is trained on full-length genes) ----
+GENES="$ROOT/SRA/assemblies/genes/$SAMPLE/genes.ffn"
+[[ -s "$GENES" ]] || { echo "[deeparg] missing $GENES (run: bin/main.sh run assembly --sample $SAMPLE)"; exit 2; }
 
-  local ctx_dir="$OUT/$context"; mkdir -p "$ctx_dir"
-  local base; base=$(basename "$fasta" | sed 's/\.\(fasta\|fa\|fna\)$//')
-  local outpfx="$ctx_dir/${label}"
-
-  # skip if already done for this context
-  [[ -s "${outpfx}.mapping.ARG" && "$FORCE" != "1" ]] && {
-    echo "[deeparg] skip $context/$label (cached)"; return 0; }
-
-  echo "[deeparg] scanning $context/$label: $fasta"
+# Every gene is scanned once; contig/MAG/plasmid/virus context is assigned
+# afterwards from the gene's contig ID (args summary / arg_context.tsv).
+CTX_DIR="$OUT/genes"; mkdir -p "$CTX_DIR"
+OUTPFX="$CTX_DIR/genes"
+if [[ -s "${OUTPFX}.mapping.ARG" && "$FORCE" != "1" && "${OUTPFX}.mapping.ARG" -nt "$GENES" ]]; then
+  echo "[deeparg] cached -> ${OUTPFX}.mapping.ARG"
+else
+  echo "[deeparg] scanning $(grep -c '^>' "$GENES") genes: $GENES"
   deeparg predict \
     --model LS \
-    -i "$fasta" \
-    -o "$outpfx" \
+    --type nucl \
+    -i "$GENES" \
+    -o "$OUTPFX" \
     -d "$DEEPARG_DATA" \
     --arg-alignment-identity 50 \
     --arg-alignment-evalue 1e-10 \
     --arg-num-alignments-per-entry 1000 \
-    2>&1 || { echo "[deeparg] WARNING: $context/$label failed"; return 0; }
-
-  if [[ -s "${outpfx}.mapping.ARG" ]]; then
-    local n; n=$(tail -n +2 "${outpfx}.mapping.ARG" | wc -l)
-    echo "[deeparg] $context/$label: $n ARG predictions"
-  fi
-}
-
-total=0
-
-# ---- 1) Contigs ----
-CONTIGS="$ROOT/SRA/assemblies/spades/$SAMPLE/contigs.fasta"
-[[ -s "$CONTIGS" ]] || CONTIGS="$ROOT/SRA/assemblies/metaviralspades/$SAMPLE/contigs.fasta"
-if [[ -s "$CONTIGS" ]]; then
-  _run_deeparg "$CONTIGS" "contigs" "contigs"
-  ((total++)) || true
+    2>&1
+  [[ -f "${OUTPFX}.mapping.ARG" ]] || { echo "[deeparg] ERROR: no ${OUTPFX}.mapping.ARG"; exit 4; }
 fi
+echo "[deeparg] $(tail -n +2 "${OUTPFX}.mapping.ARG" | wc -l) ARG predictions"
 
-# ---- 2) MAGs ----
-shopt -s nullglob
-# refined MAGScoT bins if present, else raw MetaBAT2 bins
-MAG_BINS=( "$ROOT/SRA/binning/magscot/$SAMPLE/bins"/*.fa )
-[[ ${#MAG_BINS[@]} -gt 0 ]] || MAG_BINS=( "$ROOT/SRA/binning/metabat2/$SAMPLE"/bin.*.fa )
-shopt -u nullglob
-if [[ ${#MAG_BINS[@]} -gt 0 ]]; then
-  for bin in "${MAG_BINS[@]}"; do
-    [[ -s "$bin" ]] || continue
-    label=$(basename "$bin" .fa)
-    _run_deeparg "$bin" "mags" "$label"
-    ((total++)) || true
-  done
-else
-  echo "[deeparg] skip MAGs (no bins found for $SAMPLE)"
-fi
-
-# ---- 3) Plasmids ----
-PLASMIDS=""
-for p in "$ROOT/SRA/plasmids/$SAMPLE/cluster/plasmids_derep.$SAMPLE.fasta" \
-         "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_union.fasta" \
-         "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_concat.fasta" \
-         "$ROOT/SRA/plasmids/$SAMPLE/union/"*.fasta; do
-  if [[ -s "$p" ]]; then PLASMIDS="$p"; break; fi
-done
-if [[ -n "$PLASMIDS" ]]; then
-  _run_deeparg "$PLASMIDS" "plasmids" "plasmids"
-  ((total++)) || true
-else
-  echo "[deeparg] skip plasmids (no union FASTA for $SAMPLE)"
-fi
-
-# ---- 4) Viruses ----
-VIRUSES=""
-for v in "$ROOT/SRA/viruses/$SAMPLE/union/viruses_union.fasta" \
-         "$ROOT/SRA/viruses/$SAMPLE/union/viruses_concat.fasta" \
-         "$ROOT/SRA/viruses/$SAMPLE/union/"*.fasta; do
-  if [[ -s "$v" ]]; then VIRUSES="$v"; break; fi
-done
-if [[ -n "$VIRUSES" ]]; then
-  _run_deeparg "$VIRUSES" "viruses" "viruses"
-  ((total++)) || true
-else
-  echo "[deeparg] skip viruses (no union FASTA for $SAMPLE)"
-fi
-
-echo "[deeparg] scanned $total context(s)"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"
 echo "[deeparg] done -> $OUT"

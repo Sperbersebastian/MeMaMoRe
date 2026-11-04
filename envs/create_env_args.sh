@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # create_env_args.sh
 # Umbrella creator for the ARG module (bin/modules/args.sh).
-# Envs: deeparg_env (also used by summary_args), rgi_env, amrplusplus_env, abricate_env
+# Envs: deeparg_env (also used by summary_args), rgi_env, amrplusplus_env, abricate_env, amrfinder_env, mge_env
 # Existing envs are kept; FORCE_CLEAN=1 rebuilds them.
 set -euo pipefail
 
@@ -12,9 +12,9 @@ command -v micromamba >/dev/null 2>&1 || { echo "[err] micromamba not found"; ex
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FORCE_CLEAN="${FORCE_CLEAN:-0}"
 
-env_exists(){ micromamba env list | awk 'NR>2{print $1}' | grep -qx "$1"; }
+env_exists(){ micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx "$1"; }
 
-for tool in deeparg rgi amrplusplus abricate; do
+for tool in deeparg rgi amrplusplus abricate amrfinder mge; do
   env="${tool}_env"
   if [[ "$FORCE_CLEAN" == "1" ]] && env_exists "$env"; then
     micromamba env remove -y -n "$env"
@@ -26,4 +26,4 @@ for tool in deeparg rgi amrplusplus abricate; do
   fi
 done
 
-echo "[creator] ensured: deeparg_env rgi_env amrplusplus_env abricate_env"
+echo "[creator] ensured: deeparg_env rgi_env amrplusplus_env abricate_env amrfinder_env mge_env"

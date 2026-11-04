@@ -26,13 +26,12 @@ if [[ -z "$CPUS" ]]; then
   else CPUS=4; fi
 fi
 
-if [[ "$FORCE" != "1" ]]; then
-  if compgen -G "$OUT/*" >/dev/null; then
-    echo "[checkm2] existing results in $OUT; skip (use FORCE=1)"; exit 0
-  fi
-else
-  rm -rf "$OUT"; mkdir -p "$OUT"
+# refined bins identity (magscot/<s>/bins/.md5): results are reused only for the same bins
+BINS_SUM="$(cat "$ROOT/SRA/binning/magscot/$SAMPLE/bins/.md5" 2>/dev/null || echo none)"
+if [[ "$FORCE" != "1" && -s "$OUT/quality_report.tsv" && "$(cat "$OUT/.bins.md5" 2>/dev/null)" == "$BINS_SUM" ]]; then
+  echo "[checkm2] results for these bins exist in $OUT; skip (use FORCE=1)"; exit 0
 fi
+rm -rf "$OUT"; mkdir -p "$OUT"
 
 # --- DB bootstrap compatible with 1.1.0
 DBROOT="${CHECKM2_DB_DIR:-$ROOT/refdata/checkm2}"
@@ -92,4 +91,5 @@ set -e
 if [[ $rc -ne 0 ]]; then
   echo "[checkm2] failed, see $LOG"; exit $rc
 fi
+echo "$BINS_SUM" > "$OUT/.bins.md5"
 echo "[checkm2] -> $OUT"

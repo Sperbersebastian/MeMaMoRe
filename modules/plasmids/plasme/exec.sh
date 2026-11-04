@@ -7,7 +7,9 @@ set -euo pipefail
 ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 
 # -------- Tunables --------
-: "${MIN_LEN:=0}"         # Mindestlänge in bp (empfohlen)
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+PLASME_MIN_LEN="${PLASME_MIN_LEN:-$(cfg modules.plasmids.plasme_min_len 0)}"   # bp, 0 = no length filter
 : "${MAX_AMBIG_FRAC:=0.20}"  # max. Anteil ambiger Basen (Union) relativ zur Contig-Länge
 
 # -------- Tools --------
@@ -61,7 +63,7 @@ fi
 
 # -------- Filter: Länge + Ambiguität (Intervall-Union) --------
 if [[ -n "${REPORT:-}" && -s "$REPORT" ]]; then
-  "$AWK" -v MINL="$MIN_LEN" -v MAXA="$MAX_AMBIG_FRAC" -v SEP="$SEP" -v DBG="$DBG" '
+  "$AWK" -v MINL="$PLASME_MIN_LEN" -v MAXA="$MAX_AMBIG_FRAC" -v SEP="$SEP" -v DBG="$DBG" '
     # Vereinige a-b,c-d,...; liefere UNION-Länge (inklusive)
     function amb_union_bp(ranges,   n,i,tok,parts,a,b,idx,ns,ne,curS,curE,total,t){
       gsub(/\r/,"",ranges); gsub(/[ \t]/,"",ranges)

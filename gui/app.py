@@ -64,6 +64,15 @@ def _samples():
                     samples.add(name)
     return sorted(samples)
 
+def _sample_groups():
+    """sample -> binning group (scripts/sample_groups.py logic: manifest, config/samples.tsv)."""
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    try:
+        import sample_groups
+        return sample_groups.groups(ROOT)
+    except Exception:
+        return {}
+
 def _module_status(sample):
     """Check .done sentinels for each module's substeps."""
     status = {}
@@ -141,9 +150,10 @@ def logs_page():
 @app.route("/api/samples")
 def api_samples():
     samples = _samples()
+    groups = _sample_groups()
     result = []
     for s in samples:
-        result.append({"name": s, "status": _module_status(s)})
+        result.append({"name": s, "group": groups.get(s, ""), "status": _module_status(s)})
     return jsonify(result)
 
 @app.route("/api/modules")
@@ -338,6 +348,7 @@ def api_results(sample, module):
         results["summary"] = _read_tsv(os.path.join(summary_dir, "args_summary.tsv"))
         results["virulence"] = _read_tsv(os.path.join(summary_dir, "virulence_summary.tsv"))
         results["replicons"] = _read_tsv(os.path.join(summary_dir, "plasmid_replicons.tsv"))
+        results["arg_context"] = _read_tsv(os.path.join(summary_dir, "arg_context.tsv"))
         # Per tool
         for tool in ["deeparg", "rgi", "amrplusplus"]:
             tool_dir = os.path.join(ROOT, "SRA", "args", sample, tool)
@@ -420,7 +431,8 @@ def api_logs_stream(sample):
 SUMMARY_FILES = {
     "overview": "samples_overview.tsv", "mags": "mags.tsv", "viruses": "viruses.tsv",
     "args_matrix": "args_matrix.tsv", "virulence_matrix": "virulence_matrix.tsv",
-    "replicons_matrix": "replicons_matrix.tsv",
+    "replicons_matrix": "replicons_matrix.tsv", "mag_catalog": "mag_catalog.tsv",
+    "plasmid_hosts": "plasmid_hosts.tsv",
 }
 
 @app.route("/api/summary")
@@ -532,9 +544,14 @@ def api_add_sample():
     elif source_type == "sra":
         if not re.match(r"^[A-Za-z0-9]+$", source_value):
             return jsonify({"error": "Invalid SRA accession"}), 400
-        # Launch ingest with --srr
+        group = str(data.get("group", "")).strip()
+        if group and not _valid_name(group):
+            return jsonify({"error": "Invalid group name (allowed: A-Z a-z 0-9 . _ -)"}), 400
+        # Launch ingest with --srr (and the optional binning group)
         cmd = [os.path.join(ROOT, "bin", "main.sh"), "run", "ingest",
                "--sample", sample_name, "--srr", source_value]
+        if group:
+            cmd += ["--group", group]
         log_path = os.path.join(ROOT, "logs", f"gui_ingest_{sample_name}.log")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         with open(log_path, "w") as lf:

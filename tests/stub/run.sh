@@ -14,6 +14,9 @@ STUB="$REPO/tests/stub"
 WORK="${STUB_WORK:-$(mktemp -d -t memamo_stub.XXXXXX)}"
 SAMPLE="${STUB_SAMPLE:-stub}"
 MODULES=("$@"); [[ ${#MODULES[@]} -gt 0 ]] || MODULES=(ingest qc assembly binning plasmids viruses args)
+# extra config for every module, e.g. STUB_SET="modules.qc.host_removal=human modules.plasmids.consensus=min2"
+SETS=(--set global.threads="${CPUS:-2}")
+for kv in ${STUB_SET:-}; do SETS+=(--set "$kv"); done
 
 mkdir -p "$WORK"
 for d in bin modules envs config scripts gui; do ln -sfn "$REPO/$d" "$WORK/$d"; done
@@ -21,7 +24,7 @@ for d in bin modules envs config scripts gui; do ln -sfn "$REPO/$d" "$WORK/$d"; 
 export STUB_PYTHON="${STUB_PYTHON:-$(command -v python3)}"
 export MAMBA_ROOT_PREFIX="$STUB"          # main.sh/env.sh prepend $MAMBA_ROOT_PREFIX/bin
 export PATH="$STUB/bin:/usr/local/bin:/usr/bin:/bin"
-export MEMAMO_STUB=1 CPUS="${CPUS:-2}" GTDBTK_FORCE=1   # stub: exercise GTDB-Tk regardless of RAM
+export MEMAMO_STUB=1 CPUS="${CPUS:-2}" GTDBTK_FORCE=1 PLASMER_FORCE=1   # stub: exercise RAM-gated steps
 # comma-decimal locale (if installed) so CI catches awk/sort number parsing bugs
 locale -a 2>/dev/null | grep -qi '^de_DE.utf' && export LC_ALL='' LANG=de_DE.UTF-8 LC_NUMERIC=de_DE.UTF-8
 unset ROOT GTDBTK_DATA_PATH REFDATA_BASE VIBRANT_DB
@@ -42,6 +45,9 @@ mkdir -p "$WORK/refdata/gtdbtk/release226/markers" "$WORK/refdata/mobsuite_db" "
 fake refdata/viralverify/pfam/Pfam-A.hmm
 fake refdata/genomad/genomad_db/version.txt
 mkdir -p "$WORK/refdata/iphop/Aug_2023_pub_rw"
+fake refdata/gunc/gunc_db_progenomes2.1.dmnd
+fake refdata/plasmer/.extracted
+fake refdata/mobileog/mobileOGdb_90-2.0.fasta
 fake refdata/virsorter2/db/Done_all_setup
 for h in Pfam-A_v32 KEGG_profiles_prokaryotes VOGDB94_phage; do for x in h3f h3i h3m h3p; do fake "refdata/vibrant/db/databases/$h.HMM.$x"; done; done
 fake refdata/vibrant/db/files/VIBRANT_names.tsv
@@ -56,29 +62,42 @@ printf 'header,class,mechanism,group\nMEG_1|Drugs|betalactams|Class_A_betalactam
 mkdir -p "$WORK/external"
 cp -rn "$STUB/external/." "$WORK/external/"
 
-# --- tiny paired-end reads ---------------------------------------------------
+# --- tiny paired-end reads for two samples in one binning group ---------------
+# (all samples of a test run share a group, so multi-sample binning is always tested)
+SAMPLES=("$SAMPLE" "${SAMPLE}2")
 mkdir -p "$WORK/input"
-"$STUB_PYTHON" - "$WORK/input" "$SAMPLE" <<'PY'
+"$STUB_PYTHON" - "$WORK/input" "${SAMPLES[@]}" <<'PY'
 import gzip, random, sys
-out, s = sys.argv[1], sys.argv[2]
-rnd = random.Random(1)
-for mate in (1, 2):
-    with gzip.open(f"{out}/{s}_{mate}.fastq.gz", "wt") as f:
-        for i in range(200):
-            seq = "".join(rnd.choice("ACGT") for _ in range(150))
-            f.write(f"@r{i}/{mate}\n{seq}\n+\n{'I' * 150}\n")
+out = sys.argv[1]
+for k, s in enumerate(sys.argv[2:]):
+    rnd = random.Random(1 + k)
+    for mate in (1, 2):
+        with gzip.open(f"{out}/{s}_{mate}.fastq.gz", "wt") as f:
+            for i in range(200):
+                seq = "".join(rnd.choice("ACGT") for _ in range(150))
+                f.write(f"@r{i}/{mate}\n{seq}\n+\n{'I' * 150}\n")
 PY
-printf 'sample\tfq1\tfq2\n%s\t%s\t%s\n' "$SAMPLE" \
-  "$WORK/input/${SAMPLE}_1.fastq.gz" "$WORK/input/${SAMPLE}_2.fastq.gz" > "$WORK/input/manifest.tsv"
+{
+  printf 'sample\tfq1\tfq2\tgroup\n'
+  for s in "${SAMPLES[@]}"; do
+    printf '%s\t%s\t%s\t%s\n' "$s" "$WORK/input/${s}_1.fastq.gz" "$WORK/input/${s}_2.fastq.gz" "stubgroup"
+  done
+} > "$WORK/input/manifest.tsv"
 
-echo "[stub] ROOT=$WORK sample=$SAMPLE modules=${MODULES[*]}"
+echo "[stub] ROOT=$WORK samples=${SAMPLES[*]} (group stubgroup) modules=${MODULES[*]}"
 for m in "${MODULES[@]}"; do
   echo "[stub] ===== $m ====="
   case "$m" in
-    ingest) "$WORK/bin/main.sh" run ingest --fastq "$WORK/input/manifest.tsv" ;;
-    *)      "$WORK/bin/main.sh" run "$m" --sample "$SAMPLE" --set global.threads="$CPUS" ;;
+    ingest)  "$WORK/bin/main.sh" run ingest --fastq "$WORK/input/manifest.tsv" ;;
+    binning) "$WORK/bin/main.sh" run binning --sample "$SAMPLE" "${SETS[@]}" ;;   # bins the whole group
+    *)       for s in "${SAMPLES[@]}"; do "$WORK/bin/main.sh" run "$m" --sample "$s" "${SETS[@]}"; done ;;
   esac
 done
+echo "[stub] ===== catalog ====="
+if [[ " ${MODULES[*]} " == *" binning "* ]]; then
+  # min_samples=2 so the stub (2 samples) also runs the host-correlation code
+  "$WORK/bin/main.sh" run catalog "${SETS[@]}" --set modules.hosts.min_samples=2
+fi
 echo "[stub] ===== summary ====="
 "$WORK/bin/main.sh" summary
 echo "[stub] all modules finished: ${MODULES[*]}"

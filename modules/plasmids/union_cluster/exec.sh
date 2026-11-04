@@ -13,7 +13,21 @@ LRAW="$SOUT/plasmids_raw.fasta"
 REP_OUT="$SOUT/plasmids_derep.$SAMPLE.fasta"
 GCONCAT="$GOUT/plasmids_concat.all_samples.fasta"
 
-MIN_LEN="${MIN_LEN:-2000}"
+# config (merged PARAMS_YAML from bin/main.sh; defaults when run standalone)
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+MIN_LEN="${MIN_LEN:-$(cfg modules.plasmids.min_len 2000)}"
+CONSENSUS="$(cfg modules.plasmids.consensus union)"
+MIN_OV="$(cfg modules.plasmids.consensus_min_overlap 0.5)"
+case "$CONSENSUS" in
+  union) MIN_TOOLS=1 ;; min2) MIN_TOOLS=2 ;; min3) MIN_TOOLS=3 ;;
+  *) echo "[union] invalid modules.plasmids.consensus '$CONSENSUS' (union|min2|min3)"; exit 2 ;;
+esac
+STAMP="$UOUT/.consensus"
+# rebuild the candidate set when the consensus rule changed since the last run
+if [[ -s "$RAW" && "$(cat "$STAMP" 2>/dev/null)" != "$CONSENSUS $MIN_OV" ]]; then
+  echo "[union] consensus rule changed -> rebuilding $RAW"; rm -f "$RAW"
+fi
 ID="${ID:-95}"
 COV="${COV:-80}"
 
@@ -44,6 +58,11 @@ if [[ ! -s "$RAW" ]]; then
     [[ -n "${pf:-}" ]] && awk -v p="plasme" '/^>/{sub(/^>/,">"p"|")}1' "$pf" >> "$tmp"
   fi
 
+  # Plasmer (optional 5th predictor; absent when skipped for RAM)
+  if [[ -s "$BASE/plasmer/results/${SAMPLE}.plasmer.predPlasmids.fa" ]]; then
+    awk -v p="plasmer" '/^>/{sub(/^>/,">"p"|")}1' "$BASE/plasmer/results/${SAMPLE}.plasmer.predPlasmids.fa" >> "$tmp"
+  fi
+
   # MOB-recon
   for f in "$BASE"/mobrecon/*reconstructed*.fasta "$BASE"/mobrecon/*plasmid*.fasta; do
     if [[ -s "$f" ]]; then awk -v p="mobrecon" '/^>/{sub(/^>/,">"p"|")}1' "$f" >> "$tmp"; fi
@@ -59,6 +78,14 @@ if [[ ! -s "$RAW" ]]; then
     END{ if (seqlen>=MIN && hdr!=""){print hdr; print seq} }
   ' "$tmp" > "$RAW"
   rm -f "$tmp"
+
+  # consensus: keep candidates confirmed by >= MIN_TOOLS predictors (union = all)
+  if [[ "$MIN_TOOLS" -gt 1 && -s "$RAW" ]]; then
+    mv -f "$RAW" "$UOUT/plasmids_raw.all.fasta"
+    python3 "$ROOT/scripts/plasmid_consensus.py" "$UOUT/plasmids_raw.all.fasta" "$RAW" \
+      "$UOUT/plasmid_support.tsv" "$MIN_TOOLS" "$MIN_OV"
+  fi
+  echo "$CONSENSUS $MIN_OV" > "$STAMP"
 
   if [[ ! -s "$RAW" ]]; then
     # no plasmid candidates from any tool: normal for some samples
@@ -76,6 +103,11 @@ CLSTR="${CLSTR:-$(find "$ROOT/external/Stampede-ClusterGenomes" -type f \( -name
 
 cp -f "$RAW" "$LRAW"
 FLAG="$SOUT/.done.sample.i${ID}.c${COV}"
+# candidate set changed: recluster; Stampede would silently reuse old nucmer/cover files
+if [[ -f "$FLAG" && "$RAW" -nt "$FLAG" ]] || ! cmp -s "$RAW" "$LRAW.last" 2>/dev/null; then
+  rm -f "$FLAG" "$SOUT"/plasmids_raw-nucmer.out.* "$SOUT"/plasmids_raw-cover.csv "$SOUT"/plasmids_raw_*"${ID}"-"${COV}".{fna,clstr}
+fi
+cp -f "$RAW" "$LRAW.last"
 [[ "$FORCE" == "1" ]] && rm -f "$FLAG" "$SOUT"/plasmids_raw_*"${ID}"-"${COV}".fna
 
 if [[ ! -f "$FLAG" ]]; then
@@ -93,13 +125,10 @@ if [[ -n "${CENTROID_FA:-}" && -s "$CENTROID_FA" ]]; then
   cp -f "$CENTROID_FA" "$REP_OUT"
 else
   TMP_IDS="$SOUT/rep.ids"
-  awk '
-    BEGIN{picked=0}
-    /^[[:space:]]*$/ {next}
-    /^#/ {next}
-    /^[>]*[Cc]luster[[:space:]]*[0-9]+/ {picked=0; next}
-    { if(!picked){ id=$1; sub(/^[>]/,"",id); print id; picked=1 } }
-  ' "$SOUT/clusters.txt" > "$TMP_IDS"
+  # representatives = 2nd field of the ">Cluster_N" lines of Stampede's .clstr file
+  SCLSTR="$(ls -1 "$SOUT"/plasmids_raw_*"${ID}"-"${COV}".clstr 2>/dev/null | head -n1 || true)"
+  [[ -n "$SCLSTR" ]] || { echo "[err] no Stampede .clstr in $SOUT"; exit 5; }
+  awk -F'\t' '/^>Cluster/ && NF>=2 {print $2}' "$SCLSTR" > "$TMP_IDS"
 
   awk 'BEGIN{
          while((getline k<ARGV[1])>0){want[k]=1}
@@ -115,27 +144,7 @@ fi
 [[ -s "$REP_OUT" ]] || { echo "[err] no representatives"; exit 5; }
 echo "[sample-derep] $(grep -c '^>' "$REP_OUT") reps -> $REP_OUT"
 
-# 3) Update global concat (header-dedup)
-tmp="$GOUT/.tmp.append.$$.fa"; : > "$tmp"
-awk '
-  /^>/ {h=$0; if(!(h in seen)){seen[h]=1; keep=1; print; next} keep=0}
-  { if(keep) print }
-' "$REP_OUT" > "$tmp"
-
-if [[ -s "$GCONCAT" ]]; then
-  cat "$GCONCAT" "$tmp" | awk '
-    /^>/ {h=$0; if(!(h in seen)){seen[h]=1; keep=1; print; next} keep=0}
-    { if(keep) print }
-  ' > "$GOUT/.new.concat"
-  mv -f "$GOUT/.new.concat" "$GCONCAT"
-else
-  mv -f "$tmp" "$GCONCAT"
-fi
-rm -f "$tmp"
-
-echo "$SAMPLE" >> "$GOUT/samples.list"
-awk '!seen[$0]++' "$GOUT/samples.list" > "$GOUT/.new.samples" && mv -f "$GOUT/.new.samples" "$GOUT/samples.list"
-echo "[global] appended $SAMPLE reps to $GCONCAT"
-
+# 3) The global step rebuilds the all-sample set from every sample's
+#    plasmids_derep.<sample>.fasta (headers prefixed with the sample)
 # 4) Trigger global clustering so one run suffices
 bash "$ROOT/modules/plasmids/cluster/exec.sh" "$ROOT" _ "${CPUS:-16}" "${FORCE:-0}" || true

@@ -36,7 +36,7 @@ CH=(-c conda-forge -c bioconda)
 MM config set channel_priority flexible >/dev/null 2>&1 || true
 
 # --- Helpers ---
-env_exists(){ micromamba env list | awk 'NR>2{print $1}' | grep -qx "$1"; }
+env_exists(){ micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx "$1"; }
 rm_env_if_forced(){ [[ "$FORCE_CLEAN" == "1" ]] && env_exists "$1" && MM env remove -n "$1" || true; }
 create_if_missing(){
   local env="$1"; shift

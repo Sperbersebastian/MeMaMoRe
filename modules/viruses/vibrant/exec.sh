@@ -41,14 +41,19 @@ done
 # VIBRANT expects the input basename for output naming
 IN_BASE="$(basename "$IN" .fasta)"
 
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+MINLEN="$(cfg modules.viruses.min_len 1000)"
 cmd=( VIBRANT_run.py
   -i "$IN"
   -folder "$OUT"
   -d "$DBD"
   -m "$VIBRANT_DB/files"
   -t "$CPUS"
-  -l 1000
+  -l "$MINLEN"
+  -o "$(cfg modules.viruses.vibrant_min_orfs 4)"
 )
+case "$(cfg modules.viruses.vibrant_virome false)" in true|True|1|yes) cmd+=( -virome ) ;; esac
 echo "[vibrant] ${cmd[*]}"
 "${cmd[@]}"
 # VIBRANT reports setup/input problems in its log but still exits 0

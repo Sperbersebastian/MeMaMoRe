@@ -227,6 +227,9 @@ function renderARGResults(data, container) {
       </div>
     </div>
     <div style="margin-top:8px;color:var(--text-muted);font-size:12px" id="table-count"></div>
+    ${renderKeyTable('ARG genes in context (one row per gene)', data.arg_context,
+        ['gene_id','mag','plasmid_cluster','plasmid_tools','virus_id','n_tools','aro','deeparg','rgi','amrfinderplus','abricate_resfinder','near_IS','in_integron','mobileOG_neighbours','plasmid_contig_in_mag'],
+        'arg_context.csv')}
     ${renderKeyTable('Virulence factors (VFDB)', data.virulence,
         ['context','label','gene','product','contig','identity','coverage'], 'virulence_factors.csv')}
     ${renderKeyTable('Plasmid replicons (PlasmidFinder)', data.replicons,

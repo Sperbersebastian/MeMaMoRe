@@ -67,7 +67,9 @@ fi
 echo "[gtdbtk] DB verified by check_install."
 
 # --- skip if results exist unless FORCE=1
-if [[ "$FORCE" != "1" ]] && { [[ -s "$OUT/gtdbtk.bac120.summary.tsv" ]] || [[ -s "$OUT/gtdbtk.ar53.summary.tsv" ]]; }; then
+# refined bins identity (magscot/<s>/bins/.md5): results are reused only for the same bins
+BINS_SUM="$(cat "$ROOT/SRA/binning/magscot/$SAMPLE/bins/.md5" 2>/dev/null || echo none)"
+if [[ "$FORCE" != "1" && "$(cat "$OUT/.bins.md5" 2>/dev/null)" == "$BINS_SUM" ]] && { [[ -s "$OUT/gtdbtk.bac120.summary.tsv" ]] || [[ -s "$OUT/gtdbtk.ar53.summary.tsv" ]]; }; then
   echo "[gtdbtk] outputs exist and FORCE!=1 -> skip"
   echo "[gtdbtk] -> $OUT"
   echo "[gtdbtk] log -> $LOGFILE"
@@ -86,5 +88,6 @@ micromamba run -n env_binning gtdbtk classify_wf \
   --tmpdir "$TMPDIR" \
   --skip_ani_screen
 
+echo "$BINS_SUM" > "$OUT/.bins.md5"
 echo "[gtdbtk] DONE -> $OUT"
 echo "[gtdbtk] LOG  -> $LOGFILE"

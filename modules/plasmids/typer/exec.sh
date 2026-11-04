@@ -40,7 +40,10 @@ if [[ "$GENOMAD_ON_CLUSTERED" == "1" ]]; then
   if [[ -n "$GENOMAD_DB" ]]; then
     GOUT="$OUT/genomad_on_derep"; mkdir -p "$GOUT"
     echo "[genomad] end-to-end on dereplicated plasmids"
-    micromamba run -n genomad_env genomad end-to-end "$IN" "$GOUT" "$GENOMAD_DB" --threads "$CPUS" ${GENOMAD_SPLITS:+--splits "$GENOMAD_SPLITS"}
+    # shellcheck source=bin/lib/genomad_opts.sh
+    source "$ROOT/bin/lib/genomad_opts.sh"
+    mapfile -t GOPTS < <(genomad_opts)
+    micromamba run -n genomad_env genomad end-to-end "$IN" "$GOUT" "$GENOMAD_DB" --threads "$CPUS" "${GOPTS[@]}" ${GENOMAD_SPLITS:+--splits "$GENOMAD_SPLITS"}
   else
     echo "[genomad] DB missing at $GENOMAD_DB_DEFAULT -> skip"
   fi

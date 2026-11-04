@@ -40,7 +40,7 @@ PKGS=(
 # -----------------------------
 # Create or update env_binning
 # -----------------------------
-if micromamba env list | awk 'NR>2{print $1}' | grep -qx "$ENV_NAME"; then
+if micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx "$ENV_NAME"; then
   echo "[binning] updating $ENV_NAME"
   micromamba install -y -n "$ENV_NAME" -c conda-forge -c bioconda "${PKGS[@]}"
 else
@@ -59,7 +59,7 @@ echo "[ok] core tools present in $ENV_NAME"
 # -----------------------------
 # COMEBin env (auto CPU/GPU)
 # -----------------------------
-if micromamba env list | awk 'NR>2{print $1}' | grep -qx "$COMEBIN_ENV"; then
+if micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx "$COMEBIN_ENV"; then
   echo "[comebin] env exists: $COMEBIN_ENV"
 else
   echo "[comebin] creating $COMEBIN_ENV (auto GPU detect)"

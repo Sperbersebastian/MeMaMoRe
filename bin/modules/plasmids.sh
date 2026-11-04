@@ -41,7 +41,8 @@ source "$ROOT/bin/lib/env.sh"
 # ---------- helpers ----------
 _have_reads(){
   compgen -G "$ROOT/SRA/qc/fastp/$1/*_R1*.fastq.gz" >/dev/null || \
-  compgen -G "$ROOT/SRA/qc/fastp/$1/*trimmed_1*.fastq.gz" >/dev/null
+  compgen -G "$ROOT/SRA/qc/fastp/$1/*trimmed_1*.fastq.gz" >/dev/null || \
+  compgen -G "$ROOT/SRA/qc/hostile/$1/*_clean_1.fastq.gz" >/dev/null
 }
 
 
@@ -66,6 +67,7 @@ _env_for(){
     plasme)                 echo "plasme_env" ;;
     genomad)                echo "genomad_env" ;;
     mobrecon|typer)         echo "mobsuite_env" ;;
+    plasmer)                echo "plasmer_env" ;;
     cluster|global_cluster|union_cluster) echo "stampede_env" ;;
     coverm)                 echo "plasmids_core" ;;
     typing_hotspot)         echo "hotspot_env" ;;
@@ -113,13 +115,10 @@ _global_cluster(){
 
   [[ -s "$OUT/global.clusters.txt" ]] || { echo "[global_cluster] empty clusters"; exit 3; }
 
-  awk '
-    BEGIN{picked=0}
-    /^[[:space:]]*$/ {next}
-    /^#/ {next}
-    /^[>]*[[:space:]]*[Cc]luster[[:space:]]*[0-9]+/ {picked=0; next}
-    { if(!picked){ id=$1; sub(/^[>]/,"",id); print id; picked=1 } }
-  ' "$OUT/global.clusters.txt" > "$OUT/global.rep.ids"
+  # representatives = 2nd field of the ">Cluster_N" lines of Stampede's .clstr file
+  local GCLSTR; GCLSTR="$(ls -1 "$OUT"/plasmids_concat*_"${ID}"-"${COV}".clstr 2>/dev/null | head -n1 || true)"
+  [[ -n "$GCLSTR" ]] || { echo "[global_cluster] no Stampede .clstr in $OUT"; exit 3; }
+  awk -F'\t' '/^>Cluster/ && NF>=2 {print $2}' "$GCLSTR" > "$OUT/global.rep.ids"
 
   awk 'BEGIN{
          while((getline k<ARGV[1])>0){want[k]=1}
@@ -197,6 +196,17 @@ _run_step "viralverify"    "$MOD/viralverify/exec.sh"    "$SAMPLE"
 _run_step "genomad"        "$MOD/genomad/exec.sh"        "$SAMPLE"
 _run_step "plasme"         "$MOD/plasme/exec.sh"         "$SAMPLE"
 _run_step "mobrecon"       "$MOD/mobrecon/exec.sh"       "$SAMPLE"
+# Plasmer: 5th predictor; needs >= 32 GB RAM, checked here so that plasmer_env
+# and its ~14 GB DB are not set up on machines that cannot run it
+_plasmer_on="$(PARAMS_YAML="${PARAMS_YAML:-}" bash -c 'source "$ROOT/bin/lib/cfg.sh"; cfg modules.plasmids.plasmer true')"
+_mem_gb=$(( $(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null || echo 0) / 1024 / 1024 ))
+if [[ "$_plasmer_on" =~ ^(false|False|0|no)$ ]]; then
+  echo "[skip] $SAMPLE :: plasmer (modules.plasmids.plasmer: false)"
+elif [[ "$_mem_gb" -lt "${PLASMER_MIN_MEM_GB:-32}" && "${PLASMER_FORCE:-0}" != "1" ]]; then
+  echo "[skip] $SAMPLE :: plasmer (${_mem_gb} GB RAM < ${PLASMER_MIN_MEM_GB:-32} GB; PLASMER_FORCE=1 overrides)"
+else
+  _run_step "plasmer"      "$MOD/plasmer/exec.sh"        "$SAMPLE"
+fi
 # 3) collect plasmids from 0–2
 _run_step "union_cluster"  "$MOD/union_cluster/exec.sh"  "$SAMPLE"
 # 4) per-sample typing

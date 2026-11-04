@@ -1,1 +1,2 @@
-miniset	SRA/reads/miniset/metagenome_R1.fastq.gz	SRA/reads/miniset/metagenome_R2.fastq.gz
+sample	fq1	fq2	group
+miniset	SRA/reads/miniset/metagenome_R1.fastq.gz	SRA/reads/miniset/metagenome_R2.fastq.gz	

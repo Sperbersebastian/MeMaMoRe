@@ -228,7 +228,49 @@ def samtools():
         log(f"unhandled samtools {sub}; no-op")
 
 
+def coverm_genome():
+    """coverm genome ... --genome-fasta-directory D -x fa -> Genome + one column per method."""
+    gdir, ext = Path(opt("--genome-fasta-directory")), opt("-x", "--genome-fasta-extension", default="fa")
+    reads = os.path.basename(opt("-1", "--single", default="reads"))
+    genomes = sorted(f.name[:-len(ext) - 1] for f in gdir.glob(f"*.{ext}"))
+    rows = [f"Genome\t{reads} Relative Abundance (%)\t{reads} Mean\t{reads} Covered Fraction", "unmapped\t10.0\tNA\tNA"]
+    rows += [f"{g}\t{90.0 / max(len(genomes), 1):.2f}\t12.5\t0.98" for g in genomes]
+    write(opt("-o", "--output-file"), "\n".join(rows) + "\n")
+
+
+def drep():
+    """dRep dereplicate OUT -g G... --genomeInfo INFO: one cluster per bin name (bins of the same
+    toy organism in different samples share the name, like real conspecific MAGs)."""
+    if ARGS[:1] != ["dereplicate"]:
+        return
+    out = Path(ARGS[1])
+    gi = ARGS.index("-g")
+    genomes = []
+    for a in ARGS[gi + 1:]:
+        if a.startswith("-"):
+            break
+        genomes.append(a)
+    clusters = {}
+    for g in genomes:
+        key = os.path.basename(g).split("__", 1)[-1]
+        clusters.setdefault(key, []).append(g)
+    reps = mkdir(out / "dereplicated_genomes")
+    cdb = ["genome,secondary_cluster,threshold,cluster_method,comparison_algorithm,primary_cluster"]
+    wdb = ["genome,cluster,score"]
+    for i, (key, gs) in enumerate(sorted(clusters.items()), 1):
+        for g in gs:
+            cdb.append(f"{os.path.basename(g)},{i}_1,0.05,average,skani,{i}")
+        win = sorted(gs)[0]
+        wdb.append(f"{os.path.basename(win)},{i}_1,95.0")
+        with open(win) as fi, open(reps / os.path.basename(win), "w") as fo:
+            fo.write(fi.read())
+    write(out / "data_tables" / "Cdb.csv", "\n".join(cdb) + "\n")
+    write(out / "data_tables" / "Wdb.csv", "\n".join(wdb) + "\n")
+
+
 def coverm():
+    if ARGS[:1] == ["genome"]:
+        return coverm_genome()
     ref = opt("--reference", "-r")
     methods = []
     if "--methods" in ARGS or "-m" in ARGS:
@@ -640,7 +682,8 @@ ARG_HITS = [("TEM-1", "beta-lactam", "ARO:3000873"), ("tetA", "tetracycline", "A
 
 def deeparg():
     if ARGS[:1] == ["download_data"]:
-        write(Path(opt("-o")) / "model" / "v2" / "metadata.pkl", "stub\n")
+        for f in ("metadata_LS.pkl", "model_LS.pkl"):
+            write(Path(opt("-o")) / "model" / "v2" / f, "stub\n")
         return
     fa, prefix = opt("-i", "--input-file"), opt("-o", "--output-file")
     ids = read_fasta_ids(fa)
@@ -670,7 +713,8 @@ def rgi():
            "CARD_Protein_Sequence\tPercentage Length of Reference Sequence\tID\tModel_ID\tNudged\tNote")
     rows = [hdr]
     for (gene, cls, aro), cid in zip(ARG_HITS, ids):
-        rows.append(f"{cid}_1 # 1 # 861 # 1\t{cid}\t1\t861\t+\tStrict\t500\t560.0\t{gene}\t98.5\t"
+        orf = f"{cid} # 1 # 861 # 1 # ID=1" if opt("-t") == "protein" else f"{cid}_1 # 1 # 861 # 1"
+        rows.append(f"{orf}\t{'' if opt('-t') == 'protein' else cid}\t1\t861\t+\tStrict\t500\t560.0\t{gene}\t98.5\t"
                     f"{aro.split(':')[1]}\tprotein homolog model\tn/a\tn/a\t{cls} antibiotic\t"
                     f"antibiotic inactivation\tstub family\t\t\t\t100.0\tgnl|BL_ORD_ID|1\t1\t\t")
     write(prefix + ".txt", "\n".join(rows) + "\n")
@@ -706,6 +750,223 @@ def iphop():
     write(out / "Host_prediction_to_genome_m90.csv", rows[0] + "\n")
 
 
+
+# ---------------------------------------------------------------- central gene calls
+def pyrodigal():
+    """pyrodigal -p meta -i IN -a FAA -d FFN -f gff -o GFF: two genes per contig, IDs <contig>_<n>."""
+    faa, ffn, gff = [], [], ["##gff-version  3"]
+    for cid, sq in records(opt("-i")):
+        for n in (1, 2):
+            start = 1 + (n - 1) * 600
+            end = min(len(sq), start + 299)
+            nt = sq[start - 1:end]
+            gid = f"{cid}_{n}"
+            hdr = f"{gid} # {start} # {end} # 1 # ID={n};partial=00;start_type=ATG"
+            faa.append((hdr, "M" + "A" * (len(nt) // 3 - 1)))
+            ffn.append((hdr, nt))
+            gff.append(f"{cid}\tpyrodigal_v3.7.1\tCDS\t{start}\t{end}\t50.0\t+\t0\tID={cid}_{n};partial=00")
+    write_fasta(opt("-a"), faa)
+    write_fasta(opt("-d"), ffn)
+    write(opt("-o"), "\n".join(gff) + "\n")
+
+
+
+# ---------------------------------------------------------------- MUMmer (plasmid consensus)
+def nucmer():
+    """nucmer [--maxmatch] [-t N] -p PFX REF QRY -> PFX.delta remembering the inputs."""
+    pos = positional(skip_values_for=("-p", "-t", "--prefix", "--threads"))
+    write(opt("-p", "--prefix") + ".delta", f"{os.path.abspath(pos[0])} {os.path.abspath(pos[1])}\nNUCMER\n")
+
+
+def show_coords():
+    """Full-length 100 % hits between candidates of the same contig (header 'tool|contig')."""
+    delta = positional()[-1]
+    ref = open(delta).readline().split()[0]
+    recs = records(ref)
+    for a, sa in recs:
+        for b, sb in recs:
+            if a != b and a.split("|", 1)[-1] == b.split("|", 1)[-1]:
+                la, lb = len(sa), len(sb)
+                sys.stdout.write(f"1\t{la}\t1\t{lb}\t{la}\t{lb}\t100.00\t{la}\t{lb}\t100.00\t100.00\t{a}\t{b}\n")
+
+
+
+def gunc():
+    sub = ARGS[0] if ARGS else ""
+    if sub == "download_db":
+        write(Path(positional()[1]) / "gunc_db_progenomes2.1.dmnd", "stub\n")
+        return
+    if sub != "run":
+        log(f"unhandled gunc {sub}; no-op")
+        return
+    out, suffix = mkdir(opt("-o", "--out_dir")), opt("-e", "--file_suffix", default=".fa")
+    rows = ["genome\tn_genes_called\tn_genes_mapped\tn_contigs\ttaxonomic_level\t"
+            "proportion_genes_retained_in_major_clades\tgenes_retained_index\tclade_separation_score\t"
+            "contamination_portion\tn_effective_surplus_clades\tmean_hit_identity\t"
+            "reference_representation_score\tpass.GUNC"]
+    for f in sorted(Path(opt("-d", "--input_dir")).glob("*" + suffix)):
+        n = len(read_fasta_ids(f))
+        rows.append(f"{f.name[:-len(suffix)]}\t{n}\t{n}\t2\tkingdom\t1.0\t1.0\t0.0\t0.0\t0.0\t0.95\t0.9\tTrue")
+    write(out / "GUNC.progenomes_2.1.maxCSS_level.tsv", "\n".join(rows) + "\n")
+
+
+
+def hostile():
+    """hostile clean --fastq1 A [--fastq2 B] -o DIR: copy reads, drop none; JSON report on stdout."""
+    if ARGS[:1] != ["clean"]:
+        return
+    out = mkdir(opt("-o", "--output"))
+    n = 0
+    for flag, mate in (("--fastq1", 1), ("--fastq2", 2)):
+        src = opt(flag)
+        if src:
+            base = os.path.basename(src).split(".fastq")[0]
+            copy_reads(src, out / f"{base}.clean_{mate}.fastq.gz")
+            n += count_reads(src)
+    sys.stdout.write(json.dumps([{"reads_in": n, "reads_out": n, "reads_removed": 0,
+                                  "reads_removed_proportion": 0.0}]) + "\n")
+
+
+
+def plasmer():
+    """Plasmer -g IN -p PFX -d DB -t N -m MIN -o OUT -> OUT/results/PFX.plasmer.*"""
+    fa, pfx, out = opt("-g", "--genome"), opt("-p", "--prefix", default="output"), opt("-o", "--outpath")
+    res = mkdir(Path(out) / "results")
+    pl = [(c, s_) for c, s_ in records(fa) if kind_of(c) == "plasmid"]
+    write_fasta(res / f"{pfx}.plasmer.predPlasmids.fa", pl)
+    write(res / f"{pfx}.plasmer.predClass.tsv", "".join(
+        f"{c}\t{'plasmid' if kind_of(c) == 'plasmid' else 'chromosome'}\n" for c, _ in records(fa)))
+    write(res / f"{pfx}.plasmer.predProb.tsv", "".join(f"{c}\t0.97\t0.03\n" for c, _ in pl))
+
+
+
+def semibin2():
+    """SemiBin2 single_easy_bin -i CONTIGS -b BAM... -o OUT -> OUT/output_bins/SemiBin_N.fa"""
+    if ARGS[:1] != ["single_easy_bin"]:
+        log(f"unhandled SemiBin2 {ARGS[:1]}; no-op")
+        return
+    out = Path(opt("-o", "--output"))
+    for i, (b, recs) in enumerate(sorted(contigs_by_bin(opt("-i", "--input-fasta")).items())):
+        write_fasta(out / "output_bins" / f"SemiBin_{i}.fa", recs)
+
+
+
+AMRF_COLS = ["Protein id", "Contig id", "Start", "Stop", "Strand", "Element symbol", "Element name", "Scope",
+             "Type", "Subtype", "Class", "Subclass", "Method", "Target length", "Reference sequence length",
+             "% Coverage of reference", "% Identity to reference", "Alignment length",
+             "Closest reference accession", "Closest reference name", "HMM accession", "HMM description"]
+
+
+def amrfinder():
+    if has("--database_version") or has("-u") or has("--update"):
+        print("Database version: stub")
+        return
+    hits = [("blaCTX-M-15", "BETA-LACTAM"), ("tet(A)", "TETRACYCLINE")]
+    rows = ["\t".join(AMRF_COLS)]
+    for (sym, cls), gid in zip(hits, read_fasta_ids(opt("-p", "--protein"))):
+        rows.append("\t".join([gid, "", "1", "861", "+", sym, sym + " stub", "core", "AMR", "AMR", cls, cls,
+                               "EXACTP", "287", "287", "100.00", "100.00", "287", "WP_stub", sym, "NA", "NA"]))
+    write(opt("-o", "--output"), "\n".join(rows) + "\n")
+
+
+def argnorm():
+    """argnorm TOOL [--db X] -i IN -o OUT: copy the table, add ARO columns."""
+    inp, out = opt("-i", "--input"), opt("-o", "--output")
+    with open(inp) as f:
+        lines = [ln.rstrip("\n") for ln in f if ln.strip()]
+    rows = ["# argNorm version: stub", lines[0] + "\tARO\tARO_name\tconfers_resistance_to"]
+    rows += [ln + "\tARO:3000001\tstub gene\tARO:0000001" for ln in lines[1:]]
+    write(out, "\n".join(rows) + "\n")
+
+
+
+def integron_finder():
+    """integron_finder [--local-max] --outdir D contigs.fasta: one complete integron on the plasmid contig."""
+    fa = positional(skip_values_for=("--outdir", "--cpu", "-dt", "--distance-threshold", "--topology-file"))[-1]
+    base = Path(fa).name.rsplit(".", 1)[0]
+    res = mkdir(Path(opt("--outdir", default=".")) / f"Results_Integron_Finder_{base}")
+    rows = ["# integron_finder stub",
+            "ID_integron\tID_replicon\telement\tpos_beg\tpos_end\tstrand\tevalue\ttype_elt\tannotation\tmodel\t"
+            "type\tdefault\tdistance_2attC\tconsidered_topology"]
+    for cid, _ in records(fa):
+        if kind_of(cid) == "plasmid":
+            rows.append(f"integron_01\t{cid}\t{cid}_1\t1\t300\t1\tNA\tprotein\tintI\tintersection_tyr_intI\tcomplete\tYes\tNA\tlin")
+            rows.append(f"integron_01\t{cid}\tattc_001\t620\t900\t1\t1e-5\tattC\tattC\tattc_4\tcomplete\tYes\tNA\tlin")
+    write(res / f"{base}.integrons", "\n".join(rows) + "\n")
+
+
+def isescan():
+    """isescan.py --seqfile F --output D: one IS element next to the first gene of each plasmid contig."""
+    fa, out = opt("--seqfile"), Path(opt("--output"))
+    rows = ["seqID\tfamily\tcluster\tisBegin\tisEnd\tisLen\tncopy4is\tstart1\tend1\tstart2\tend2\tscore\t"
+            "irId\tirLen\tnGaps\torfBegin\torfEnd\tstrand\torfLen\tE-value\tE-value4copy\ttype\tov\ttir"]
+    for cid, _ in records(fa):
+        if kind_of(cid) == "plasmid":
+            rows.append(f"{cid}\tIS6\tIS6_1\t2000\t2820\t821\t1\t2000\t2020\t2800\t2820\t20\t18\t20\t0\t"
+                        f"2050\t2780\t+\t731\t1e-80\t1e-80\tc\t0\tGGTTCTGTTGCAAAGTTT")
+    write(out / (Path(fa).name + ".tsv"), "\n".join(rows) + "\n")
+
+
+
+def diamond():
+    """diamond makedb --in F -d DB | blastp -q Q -d DB -o OUT: every 2nd gene of a plasmid contig is an MGE gene."""
+    sub = ARGS[0] if ARGS else ""
+    if sub == "makedb":
+        write(opt("-d", "--db") + ".dmnd", "stub\n")
+    elif sub == "blastp":
+        rows = []
+        for gid in read_fasta_ids(opt("-q", "--query")):
+            if kind_of(gid) == "plasmid" and gid.endswith("_2"):
+                rows.append(f"{gid}\tmobileOG_000000001|stub|tnpA|integration/excision|transposase|stub|HC\t98.5\t100\t1e-90\t500")
+        write(opt("-o", "--out"), "\n".join(rows) + ("\n" if rows else ""))
+    elif sub == "version":
+        print("diamond version stub")
+
+
+
+def minced():
+    """minced -spacers MAG out.crisprs out.gff: one spacer (32 bp of the toy plasmid) per MAG."""
+    pos = positional()
+    out = pos[1]
+    stem = out[:-len(".crisprs")] if out.endswith(".crisprs") else out
+    name, ln, _, _ = CONTIGS[0]
+    write(out, "CRISPR 1   Range: 1 - 100\n")
+    write(pos[2], "##gff-version 3\n")
+    write(stem + "_spacers.fa", ">CRISPR_1_spacer_1\n" + seq(name, ln)[100:132] + "\n")
+
+
+def makeblastdb():
+    write(opt("-out") + ".stubdb", os.path.abspath(opt("-in")) + "\n")
+
+
+def blastn():
+    """Exact substring search of each query in the db FASTA (outfmt 6 qseqid sseqid pident length mismatch gaps qlen)."""
+    db = open(opt("-db") + ".stubdb").read().strip()
+    targets = records(db)
+    rows = []
+    for qid, q in records(opt("-query")):
+        for tid, t in targets:
+            if q and q in t:
+                rows.append(f"{qid}\t{tid}\t100.000\t{len(q)}\t0\t0\t{len(q)}")
+    write(opt("-out"), "\n".join(rows) + ("\n" if rows else ""))
+
+
+
+def bakta():
+    """bakta --db D --prefix P --output O MAG.fa -> O/P.{gff3,faa,tsv}"""
+    out, pfx = mkdir(opt("--output", "-o")), opt("--prefix", "-p")
+    fa = positional(skip_values_for=("--db", "--prefix", "-p", "--output", "-o", "--threads", "-t"))[-1]
+    ids = read_fasta_ids(fa)
+    write(out / f"{pfx}.gff3", "##gff-version 3\n" + "".join(f"{c}\tBakta\tCDS\t1\t300\t.\t+\t0\tID={pfx}_{i}\n" for i, c in enumerate(ids)))
+    write(out / f"{pfx}.tsv", "#Sequence Id\tType\tStart\tStop\tStrand\tLocus Tag\tGene\tProduct\n")
+    write(out / f"{pfx}.faa", "".join(f">{pfx}_{i}\nMAAA\n" for i, _ in enumerate(ids)))
+
+
+def bakta_db():
+    if ARGS[:1] == ["download"]:
+        write(Path(opt("--output", "-o")) / "db-light" / "version.json", '{"type": "light"}\n')
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -718,7 +979,11 @@ HANDLERS = {
     "metaplasmidspades.py": metaplasmidspades, "metaviralspades.py": metaviralspades,
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
-    "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop,
+    "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
+    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2, "amrfinder": amrfinder, "argnorm": argnorm,
+    "integron_finder": integron_finder, "isescan.py": isescan, "diamond": diamond, "dRep": drep,
+    "minced": minced, "makeblastdb": makeblastdb, "blastn": blastn,
+    "bakta": bakta, "bakta_db": bakta_db,
 }
 
 if __name__ == "__main__":

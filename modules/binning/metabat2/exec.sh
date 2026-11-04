@@ -8,7 +8,12 @@ LOG="$ROOT/logs/binning_metabat2_${SAMPLE}.log"
 mkdir -p "$OUT"
 
 # pick the SPAdes assembly used for mapping
-RAW_CONTIG="$ASM_DIR/contigs.len1000.fasta"
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+GMINLEN="$(cfg global.contig_min_len 1000)"
+MINC="$(cfg modules.binning.min_contig_len 1500)"
+if [[ "$MINC" -lt 1500 ]]; then echo "[metabat2] min_contig_len $MINC < 1500 (MetaBAT2 floor) -> 1500"; MINC=1500; fi
+RAW_CONTIG="$ASM_DIR/contigs.len${GMINLEN}.fasta"
 [[ -s "$RAW_CONTIG" ]] || RAW_CONTIG="$ASM_DIR/contigs.fasta"
 [[ -s "$RAW_CONTIG" ]] || { echo "[metabat2] no contigs for $SAMPLE"; exit 0; }
 
@@ -18,21 +23,21 @@ RAW_CONTIG="$ASM_DIR/contigs.len1000.fasta"
 THREADS=$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" \
   --defaults "$PARAMS_YAML" --get global.threads 2>/dev/null || echo 4)
 
-# Filter contigs >=1500bp (MetaBAT2 hard floor)
-FILT="$OUT/contigs.min1500.fasta"
-micromamba run -n env_binning seqkit seq -m 1500 "$RAW_CONTIG" > "$FILT"
+# Filter contigs >= MINC (MetaBAT2 hard floor 1500)
+FILT="$OUT/contigs.min${MINC}.fasta"
+micromamba run -n env_binning seqkit seq -m "$MINC" "$RAW_CONTIG" > "$FILT"
 
 if [[ ! -s "$FILT" ]]; then
-  echo "[metabat2] no contigs >=1500 for $SAMPLE" | tee -a "$LOG"; exit 0;
+  echo "[metabat2] no contigs >=${MINC} for $SAMPLE" | tee -a "$LOG"; exit 0;
 fi
 
 # filter depth rows to same contigs AND reorder to match FASTA order
 KEEP="$OUT/contigs.keep.txt"; grep '^>' "$FILT" | sed 's/^>//; s/ .*//' > "$KEEP"
-DEP_FILT="$OUT/${SAMPLE}.depth.min1500.txt"
+DEP_FILT="$OUT/${SAMPLE}.depth.min${MINC}.txt"
 awk 'NR==1{print; next} FNR==NR{keep[$1]=1; next} ($1 in keep)' "$KEEP" "$COV" > "$DEP_FILT"
 
 # Build JGI depth in EXACT FASTA order; zero-fill missing contigs
-DEP_SORT="$OUT/${SAMPLE}.depth.min1500.ordered.txt"
+DEP_SORT="$OUT/${SAMPLE}.depth.min${MINC}.ordered.txt"
 micromamba run -n env_sra_tools python - <<'PY' "$FILT" "$COV" "$DEP_SORT"
 import sys, csv
 fa, dep_in, dep_out = sys.argv[1:]
@@ -90,7 +95,7 @@ micromamba run -n env_binning metabat2 \
   -a "$DEP_SORT" \
   -o "$OUT/bin" \
   -t "$THREADS" \
-  --minContig 1500 \
+  --minContig "$MINC" \
   >"$LOG" 2>&1 || true
 
 echo "[metabat2] bins -> $OUT/"
