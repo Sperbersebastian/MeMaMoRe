@@ -54,3 +54,7 @@ modules:
   args:
     mge: true                   # ISEScan + IntegronFinder 2 for ARG context
     is_window: 5000             # bp: ARG counts as "near IS" within this distance
+    mobileog: true              # mobileOG-db 2.0.1 (DIAMOND on genes.faa), MGE genes near ARGs
+    mobileog_min_id: 90         # thresholds as in mobileOGs-pl
+    mobileog_min_qcov: 90
+    mobileog_evalue: 1e-20

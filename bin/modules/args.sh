@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ARG Detection Module Coordinator (bin/modules/args.sh)
-# Per-sample pipeline: DeepARG → RGI → AMR++ → ABRicate (VFDB/ResFinder/PlasmidFinder) → AMRFinderPlus + argNorm → ISEScan/IntegronFinder → summary
+# Per-sample pipeline: DeepARG → RGI → AMR++ → ABRicate (VFDB/ResFinder/PlasmidFinder) → AMRFinderPlus + argNorm → ISEScan/IntegronFinder → mobileOG-db → summary
 set -euo pipefail
 
 : "${ROOT:?ROOT not set}"
@@ -37,7 +37,7 @@ _run_step(){
     amrplusplus)   env_name="amrplusplus_env" ;;
     abricate)      env_name="abricate_env" ;;
     amrfinderplus) env_name="amrfinder_env" ;;
-    mge)           env_name="mge_env" ;;
+    mge|mobileog)  env_name="mge_env" ;;
     summary_args)  env_name="deeparg_env" ;;
     *)             env_name="deeparg_env" ;;
   esac
@@ -55,7 +55,7 @@ exec > >(stdbuf -oL tee -a "$LOGFILE") 2>&1
 echo "[args] START sample=$SAMPLE cpus=$CPUS force=$FORCE host=$(hostname)"
 
 # verify scripts exist
-for s in deeparg rgi amrplusplus abricate amrfinderplus mge summary; do
+for s in deeparg rgi amrplusplus abricate amrfinderplus mge mobileog summary; do
   [[ -x "$MOD/$s/exec.sh" ]] || { echo "[error] missing: $MOD/$s/exec.sh"; exit 1; }
 done
 
@@ -73,6 +73,8 @@ _run_step "abricate"      "$MOD/abricate/exec.sh"      "$SAMPLE"
 _run_step "amrfinderplus" "$MOD/amrfinderplus/exec.sh" "$SAMPLE"
 # 5) IS elements (ISEScan) + integrons (IntegronFinder 2) as ARG context
 _run_step "mge"           "$MOD/mge/exec.sh"           "$SAMPLE"
+# 6) mobileOG-db (DIAMOND on genes.faa) for the MGE neighbourhood of ARGs
+_run_step "mobileog"      "$MOD/mobileog/exec.sh"      "$SAMPLE"
 _run_step "summary_args"  "$MOD/summary/exec.sh"       "$SAMPLE"
 
 echo "[args] DONE sample=$SAMPLE"

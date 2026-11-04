@@ -865,6 +865,22 @@ def isescan():
     write(out / (Path(fa).name + ".tsv"), "\n".join(rows) + "\n")
 
 
+
+def diamond():
+    """diamond makedb --in F -d DB | blastp -q Q -d DB -o OUT: every 2nd gene of a plasmid contig is an MGE gene."""
+    sub = ARGS[0] if ARGS else ""
+    if sub == "makedb":
+        write(opt("-d", "--db") + ".dmnd", "stub\n")
+    elif sub == "blastp":
+        rows = []
+        for gid in read_fasta_ids(opt("-q", "--query")):
+            if kind_of(gid) == "plasmid" and gid.endswith("_2"):
+                rows.append(f"{gid}\tmobileOG_000000001|stub|tnpA|integration/excision|transposase|stub|HC\t98.5\t100\t1e-90\t500")
+        write(opt("-o", "--out"), "\n".join(rows) + ("\n" if rows else ""))
+    elif sub == "version":
+        print("diamond version stub")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -879,7 +895,7 @@ HANDLERS = {
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
     "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2, "amrfinder": amrfinder, "argnorm": argnorm,
-    "integron_finder": integron_finder, "isescan.py": isescan,
+    "integron_finder": integron_finder, "isescan.py": isescan, "diamond": diamond,
 }
 
 if __name__ == "__main__":

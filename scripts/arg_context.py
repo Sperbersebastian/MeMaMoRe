@@ -226,11 +226,29 @@ def main():
         _, gs, ge = genes[gid]
         return ";".join(lbl for s_, e_, lbl in table.get(contig, []) if gs <= e_ + pad and ge >= s_ - pad)
 
+    # mobileOG-db hits of the genes around each ARG (same contig, within the IS window)
+    mog_by_contig = defaultdict(list)
+    for r in read_tsv(os.path.join(args_dir, "mobileog", "genes.tsv")):
+        gid = r.get("gene_id", "")
+        if gid in genes:
+            c_, s_, e_ = genes[gid]
+            mog_by_contig[c_].append((s_, e_, gid, r.get("major_category", "") or "unknown"))
+
+    def mobileog_near(contig, gid, pad):
+        if gid not in genes:
+            return ""
+        _, gs, ge = genes[gid]
+        cats = defaultdict(int)
+        for s_, e_, other, cat in mog_by_contig.get(contig, []):
+            if other != gid and gs <= e_ + pad and ge >= s_ - pad:
+                cats[cat] += 1
+        return ";".join(f"{k}:{v}" for k, v in sorted(cats.items()))
+
     tools = ["deeparg", "rgi", "amrfinderplus", "abricate_resfinder"]
     all_genes = sorted({g for t in tools for g in hits[t]},
                        key=lambda g: (contig_of(g), genes.get(g, ("", 0, 0))[1]))
     cols = ["gene_id", "contig", "start", "end", "mag", "plasmid_cluster", "plasmid_tools", "virus_id",
-            "n_tools", "aro"] + tools + ["near_IS", "in_integron", "plasmid_contig_in_mag"]
+            "n_tools", "aro"] + tools + ["near_IS", "in_integron", "mobileOG_neighbours", "plasmid_contig_in_mag"]
     rows = []
     for g in all_genes:
         c = contig_of(g)
@@ -246,6 +264,7 @@ def main():
             **{t: hits[t].get(g, "") for t in tools},
             "near_IS": near(is_by_contig, c, g, window),
             "in_integron": near(int_by_contig, c, g, 0),
+            "mobileOG_neighbours": mobileog_near(c, g, window),
             "plasmid_contig_in_mag": "yes" if (m and (pc or pt)) else "",
         })
     with open(os.path.join(out_dir, "arg_context.tsv"), "w", newline="") as f:
