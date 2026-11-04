@@ -44,6 +44,8 @@ modules:
     min_samples: 6              # fewer samples: no correlation (note in plasmid_hosts.tsv)
     min_rho: 0.7                # Spearman rho
     max_p: 0.05                 # permutation p-value
+    crispr: true                # MinCED spacers of MAGs vs plasmid/virus contigs (blastn-short)
+    crispr_max_mismatch: 1      # mismatches + gaps over the full spacer length
   plasmids:
     # union: every candidate of any predictor (default, previous behaviour)
     # min2 / min3: candidates confirmed by >= 2 / 3 predictors, i.e. covered over

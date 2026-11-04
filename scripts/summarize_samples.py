@@ -164,6 +164,10 @@ def main():
         # --- viruses: CheckV on the union set ---
         cv = read_tsv(os.path.join(sra, "viruses", s, "checkv", "quality_summary.tsv"))
         hosts = {}
+        crispr_v = defaultdict(set)   # "<contig>" -> MAGs with a matching CRISPR spacer
+        for r in read_tsv(os.path.join(sra, "summary", "crispr_hits.tsv")):
+            if r.get("target_type") == "virus" and r.get("target", "").startswith(s + "|"):
+                crispr_v[r["target"].split("|", 1)[1]].add(r.get("mag", ""))
         hp = os.path.join(sra, "viruses", s, "iphop", "host_genus.csv")
         if os.path.isfile(hp):
             with open(hp, newline="") as f:
@@ -178,7 +182,8 @@ def main():
                 vq[qual] += 1
                 viruses.append([s, r.get("contig_id", ""), r.get("contig_length", ""), qual,
                                 r.get("completeness", ""), r.get("provirus", ""),
-                                hosts.get(r.get("contig_id", ""), "")])
+                                hosts.get(r.get("contig_id", ""), ""),
+                                ",".join(sorted(crispr_v.get(r.get("contig_id", ""), ())))])
             row["viruses"] = len(cv)
             row["viruses_complete_hq"] = vq["Complete"] + vq["High-quality"]
 
@@ -222,7 +227,8 @@ def main():
                "gtdb_classification"],
               mags)
     write_tsv(os.path.join(out, "viruses.tsv"),
-              ["sample", "contig", "length", "checkv_quality", "completeness", "provirus", "iphop_host_genus"],
+              ["sample", "contig", "length", "checkv_quality", "completeness", "provirus", "iphop_host_genus",
+               "crispr_host_mags"],
               viruses)
     write_matrix(os.path.join(out, "args_matrix.tsv"), "tool|gene", arg_m, samples)
     write_matrix(os.path.join(out, "virulence_matrix.tsv"), "gene", vir_m, samples)

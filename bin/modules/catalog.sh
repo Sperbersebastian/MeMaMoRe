@@ -8,6 +8,8 @@
 #   4) SRA/summary/mag_catalog.tsv (+ SRA/catalog/ working dir)
 #   5) SRA/summary/plasmid_hosts.tsv: HOTSPOT next to the abundance-correlated
 #      catalog genome (Spearman over samples; needs modules.hosts.min_samples)
+#   6) CRISPR spacers of the MAGs vs plasmid/virus contigs -> crispr_hits.tsv,
+#      shown in plasmid_hosts.tsv and viruses.tsv (crispr_host_mags)
 # Runs inside drep_env (dRep, skani, CoverM).
 set -euo pipefail
 : "${ROOT:?}"
@@ -87,5 +89,12 @@ if [[ -s "$GPL" && ${#SAMPLES[@]} -ge "$MIN_SAMPLES" ]]; then
 elif [[ -s "$GPL" ]]; then
   echo "[hosts] ${#SAMPLES[@]} sample(s) < modules.hosts.min_samples=$MIN_SAMPLES: no abundance correlation"
 fi
+# ---- 6) CRISPR spacers of the MAGs vs plasmid/virus contigs (host evidence, own env) ----
+case "$(cfg modules.hosts.crispr true)" in
+  false|False|0|no) printf 'mag\tspacer\ttarget\ttarget_type\tmismatches\tidentity\n' > "$ROOT/SRA/summary/crispr_hits.tsv" ;;
+  *) micromamba env list --json | grep -q '/crispr_env"' || bash "$ROOT/envs/create_env_crispr.sh"
+     SAMPLES="${SAMPLES[*]}" micromamba run -n crispr_env bash "$ROOT/modules/hosts/crispr/exec.sh" ;;
+esac
+
 python3 "$ROOT/scripts/plasmid_hosts.py" "$ROOT" "$OUT" "$MIN_SAMPLES" \
   "$(cfg modules.hosts.min_rho 0.7)" "$(cfg modules.hosts.max_p 0.05)" "${SAMPLES[@]}"

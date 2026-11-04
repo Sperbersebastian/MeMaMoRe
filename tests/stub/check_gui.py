@@ -51,6 +51,8 @@ if r.status_code != 200:
 summ = c.get("/api/summary").get_json() or {}
 if not any(row.get("sample") == sample for row in summ.get("overview", [])):
     fail.append("/api/summary overview has no row for the sample")
+if not any(r.get("crispr_host_mags") for r in summ.get("plasmid_hosts", [])):
+    fail.append("/api/summary: no CRISPR host evidence in plasmid_hosts")
 if not summ.get("plasmid_hosts"):
     fail.append("/api/summary: plasmid_hosts empty")
 if not summ.get("mag_catalog"):

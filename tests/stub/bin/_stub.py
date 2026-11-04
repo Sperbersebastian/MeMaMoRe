@@ -923,6 +923,34 @@ def diamond():
         print("diamond version stub")
 
 
+
+def minced():
+    """minced -spacers MAG out.crisprs out.gff: one spacer (32 bp of the toy plasmid) per MAG."""
+    pos = positional()
+    out = pos[1]
+    stem = out[:-len(".crisprs")] if out.endswith(".crisprs") else out
+    name, ln, _, _ = CONTIGS[0]
+    write(out, "CRISPR 1   Range: 1 - 100\n")
+    write(pos[2], "##gff-version 3\n")
+    write(stem + "_spacers.fa", ">CRISPR_1_spacer_1\n" + seq(name, ln)[100:132] + "\n")
+
+
+def makeblastdb():
+    write(opt("-out") + ".stubdb", os.path.abspath(opt("-in")) + "\n")
+
+
+def blastn():
+    """Exact substring search of each query in the db FASTA (outfmt 6 qseqid sseqid pident length mismatch gaps qlen)."""
+    db = open(opt("-db") + ".stubdb").read().strip()
+    targets = records(db)
+    rows = []
+    for qid, q in records(opt("-query")):
+        for tid, t in targets:
+            if q and q in t:
+                rows.append(f"{qid}\t{tid}\t100.000\t{len(q)}\t0\t0\t{len(q)}")
+    write(opt("-out"), "\n".join(rows) + ("\n" if rows else ""))
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -938,6 +966,7 @@ HANDLERS = {
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
     "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2, "amrfinder": amrfinder, "argnorm": argnorm,
     "integron_finder": integron_finder, "isescan.py": isescan, "diamond": diamond, "dRep": drep,
+    "minced": minced, "makeblastdb": makeblastdb, "blastn": blastn,
 }
 
 if __name__ == "__main__":
