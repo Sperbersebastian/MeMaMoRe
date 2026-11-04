@@ -46,18 +46,17 @@ fi
 [[ -s "$GOUT/global.clusters.txt" ]] || { echo "[err] global.clusters.txt leer"; exit 4; }
 
 # 3) Representatives (prefer Stampede centroid)
-GCENTROID="$(ls -1 "$GOUT"/plasmids_concat_*"${ID}"-"${COV}".fna 2>/dev/null | head -n1 || true)"
+# Stampede writes <input stem>_<ID>-<COV>.fna and .clstr (input plasmids_concat.all_samples.fasta)
+GCENTROID="$(ls -1 "$GOUT"/plasmids_concat*_"${ID}"-"${COV}".fna 2>/dev/null | head -n1 || true)"
 if [[ -n "${GCENTROID:-}" && -s "$GCENTROID" ]]; then
   cp -f "$GCENTROID" "$GREP_OUT"
 else
   GREP_IDS="$GOUT/global.rep.ids"
-  awk '
-    BEGIN{picked=0}
-    /^[[:space:]]*$/ {next}
-    /^#/ {next}
-    /^[>]*[Cc]luster[[:space:]]*[0-9]+/ {picked=0; next}
-    { if(!picked){ id=$1; sub(/^[>]/,"",id); print id; picked=1 } }
-  ' "$GOUT/global.clusters.txt" > "$GREP_IDS"
+  # representatives = 2nd field of the ">Cluster_N" lines of the .clstr file
+  # (global.clusters.txt is Stampede's verbose log, not a cluster list)
+  GCLSTR="$(ls -1 "$GOUT"/plasmids_concat*_"${ID}"-"${COV}".clstr 2>/dev/null | head -n1 || true)"
+  [[ -n "$GCLSTR" ]] || { echo "[err] no Stampede .clstr in $GOUT"; exit 4; }
+  awk -F'\t' '/^>Cluster/ && NF>=2 {print $2}' "$GCLSTR" > "$GREP_IDS"
 
   awk 'BEGIN{
          while((getline k<ARGV[1])>0){want[k]=1}

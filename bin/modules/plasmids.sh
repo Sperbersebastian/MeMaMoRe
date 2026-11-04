@@ -115,13 +115,10 @@ _global_cluster(){
 
   [[ -s "$OUT/global.clusters.txt" ]] || { echo "[global_cluster] empty clusters"; exit 3; }
 
-  awk '
-    BEGIN{picked=0}
-    /^[[:space:]]*$/ {next}
-    /^#/ {next}
-    /^[>]*[[:space:]]*[Cc]luster[[:space:]]*[0-9]+/ {picked=0; next}
-    { if(!picked){ id=$1; sub(/^[>]/,"",id); print id; picked=1 } }
-  ' "$OUT/global.clusters.txt" > "$OUT/global.rep.ids"
+  # representatives = 2nd field of the ">Cluster_N" lines of Stampede's .clstr file
+  local GCLSTR; GCLSTR="$(ls -1 "$OUT"/plasmids_concat*_"${ID}"-"${COV}".clstr 2>/dev/null | head -n1 || true)"
+  [[ -n "$GCLSTR" ]] || { echo "[global_cluster] no Stampede .clstr in $OUT"; exit 3; }
+  awk -F'\t' '/^>Cluster/ && NF>=2 {print $2}' "$GCLSTR" > "$OUT/global.rep.ids"
 
   awk 'BEGIN{
          while((getline k<ARGV[1])>0){want[k]=1}

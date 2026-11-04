@@ -121,13 +121,10 @@ if [[ -n "${CENTROID_FA:-}" && -s "$CENTROID_FA" ]]; then
   cp -f "$CENTROID_FA" "$REP_OUT"
 else
   TMP_IDS="$SOUT/rep.ids"
-  awk '
-    BEGIN{picked=0}
-    /^[[:space:]]*$/ {next}
-    /^#/ {next}
-    /^[>]*[Cc]luster[[:space:]]*[0-9]+/ {picked=0; next}
-    { if(!picked){ id=$1; sub(/^[>]/,"",id); print id; picked=1 } }
-  ' "$SOUT/clusters.txt" > "$TMP_IDS"
+  # representatives = 2nd field of the ">Cluster_N" lines of Stampede's .clstr file
+  SCLSTR="$(ls -1 "$SOUT"/plasmids_raw_*"${ID}"-"${COV}".clstr 2>/dev/null | head -n1 || true)"
+  [[ -n "$SCLSTR" ]] || { echo "[err] no Stampede .clstr in $SOUT"; exit 5; }
+  awk -F'\t' '/^>Cluster/ && NF>=2 {print $2}' "$SCLSTR" > "$TMP_IDS"
 
   awk 'BEGIN{
          while((getline k<ARGV[1])>0){want[k]=1}
