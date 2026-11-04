@@ -6,12 +6,18 @@ Inputs come from tests/e2e/run_e2e.sh:
   --provenance  truth table written by modules/sim (type, accession, set)
   --contigs-paf minimap2 alignment of the assembly contigs against --refs
   --pred-paf    minimap2 alignment of the plasmid union (headers "<tool>|<name>") against --refs
+  --self-paf    optional all-vs-all minimap2 alignment of the plasmid union against itself;
+                enables the consensus rows "min2" and "min3"
 
 Every contig / predicted sequence is labelled with the reference it aligns to best
 (most aligned bases); sequences whose best reference covers less than --min-qcov of
 their length are "unassigned" and count as false positives.
 
-Metrics per tool (plus "union" over all tools):
+Consensus (with --self-paf): a prediction belongs to "min<k>" if predictions of at least k
+different tools (itself included) agree with it, i.e. align over >= --min-agree of the shorter
+of the two sequences. This is the rule MeMaMoRe's plasmid consensus uses; it needs no truth.
+
+Metrics per tool (plus "union" over all tools and "min2"/"min3" with --self-paf):
   precision_bp       plasmid bases / all predicted bases
   precision_n        plasmid sequences / all predicted sequences
   recall_bp_assembly reference-plasmid bases covered by predictions / covered by assembly contigs
@@ -102,6 +108,26 @@ def covered_plasmid_bases(assigned, types):
     return sum(merged_length(v) for v in by_ref.values())
 
 
+def tool_of(name):
+    return name.split("|", 1)[0] if "|" in name else "unknown"
+
+
+def agreeing_tools(self_paf, min_agree):
+    """{query: set of tools whose predictions align over >= min_agree of the shorter sequence}."""
+    agree = defaultdict(set)
+    with open(self_paf) as fh:
+        for line in fh:
+            f = line.rstrip("\n").split("\t")
+            if len(f) < 12 or f[0] == f[5]:
+                continue
+            qlen, tlen = int(f[1]), int(f[6])
+            aligned = min(int(f[3]) - int(f[2]), int(f[8]) - int(f[7]))
+            if aligned >= min_agree * min(qlen, tlen):
+                agree[f[0]].add(tool_of(f[5]))
+                agree[f[5]].add(tool_of(f[0]))
+    return agree
+
+
 def safe_div(a, b):
     return round(a / b, 4) if b else None
 
@@ -133,6 +159,9 @@ def main(argv=None):
     ap.add_argument("--provenance", required=True)
     ap.add_argument("--contigs-paf", required=True)
     ap.add_argument("--pred-paf", required=True)
+    ap.add_argument("--self-paf", help="all-vs-all alignment of the predictions (enables min2/min3)")
+    ap.add_argument("--min-agree", type=float, default=0.5,
+                    help="aligned fraction of the shorter sequence for two predictions to agree")
     ap.add_argument("--min-len", type=int, default=1000, help="ignore contigs shorter than this (bp)")
     ap.add_argument("--min-qcov", type=float, default=0.5, help="aligned fraction needed to assign a label")
     ap.add_argument("--out-tsv", required=True)
@@ -149,11 +178,15 @@ def main(argv=None):
     preds = assign(args.pred_paf, args.min_len, args.min_qcov)
     by_tool = defaultdict(dict)
     for qname, v in preds.items():
-        tool = qname.split("|", 1)[0] if "|" in qname else "unknown"
-        by_tool[tool][qname] = v
+        by_tool[tool_of(qname)][qname] = v
 
     rows = [score(t, by_tool[t], types, asm_cov, ref_total) for t in sorted(by_tool)]
     rows.append(score("union", preds, types, asm_cov, ref_total))
+    if args.self_paf:
+        agree = agreeing_tools(args.self_paf, args.min_agree)
+        for k in (2, 3):
+            sub = {q: v for q, v in preds.items() if len(agree[q] | {tool_of(q)}) >= k}
+            rows.append(score(f"min{k}", sub, types, asm_cov, ref_total))
 
     cols = list(rows[0].keys()) if rows else []
     with open(args.out_tsv, "w", newline="") as fh:

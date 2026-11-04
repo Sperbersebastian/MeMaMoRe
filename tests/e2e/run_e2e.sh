@@ -3,9 +3,12 @@
 #
 #   tests/e2e/run_e2e.sh [--config config/sim.yaml] [--cpus N] [--skip-binning] [--keep]
 #
-# Steps: simulate reads (modules/sim) -> ingest -> qc -> assembly -> [binning] -> plasmids
-#        -> align contigs and plasmid predictions to the known references -> metrics.
-# Results: tests/e2e/results/<SET>/{metrics.tsv,metrics.json,versions.tsv,timings.tsv}
+# Steps: simulate reads (modules/sim; one or more samples, all in one group) -> ingest ->
+#        per sample qc -> assembly -> [binning] -> plasmids -> align contigs and plasmid
+#        predictions to the known references -> metrics (per tool, union, >= 2 and >= 3 tools),
+#        MetaQUAST, MAG quality.
+# Results: tests/e2e/results/<SET>/{metrics.tsv,timings.tsv,versions.tsv,provenance.tsv,weights.tsv}
+#          plus one folder per sample (metrics.json, metaquast/, mags.tsv, PAF files)
 #
 # Needs micromamba plus the databases the modules use (geNomad, PLASMe, CheckM2, GTDB-Tk
 # for binning). Not run in CI: it downloads references and takes hours on a workstation.
@@ -52,44 +55,65 @@ step(){ # step <name> <cmd...>; records wall time and stops on failure
 
 need(){ [[ -s "$1" ]] || { echo "[e2e] expected output missing: $1" >&2; exit 4; }; }
 
-# 1) simulate
+# 1) simulate (one or more samples, all in group $SET; see scripts/sim_plan.py)
 step sim "$MAIN" run sim
 REFDIR="$ROOT/refdata/testsets/$SET"
-R1="$ROOT/SRA/reads/$SET/metagenome_R1.fastq.gz"; R2="$ROOT/SRA/reads/$SET/metagenome_R2.fastq.gz"
-need "$R1"; need "$R2"; need "$REFDIR/refs/combined.fna"; need "$REFDIR/truth/provenance.tsv"
+SIMMANI="$REFDIR/sim/manifest.tsv"
+need "$SIMMANI"; need "$REFDIR/refs/combined.fna"; need "$REFDIR/truth/provenance.tsv"
+mapfile -t SAMPLES < <(tail -n +2 "$SIMMANI" | cut -f1)
+[[ ${#SAMPLES[@]} -gt 0 ]] || { echo "[e2e] no samples in $SIMMANI" >&2; exit 4; }
+cp "$REFDIR/truth/provenance.tsv" "$REFDIR/truth/weights.tsv" "$OUT/"
 
-# 2) ingest via a one-row manifest
-MANI="$OUT/manifest.tsv"
-printf "sample\tfq1\tfq2\n%s\t%s\t%s\n" "$SET" "$(readlink -f "$R1")" "$(readlink -f "$R2")" > "$MANI"
-step ingest   "$MAIN" run ingest --fastq "$MANI"
-step qc       "$MAIN" run qc       --sample "$SET" "${FORCE_FLAG[@]}"
-step assembly "$MAIN" run assembly --sample "$SET" "${FORCE_FLAG[@]}"
-CONTIGS="$ROOT/SRA/assemblies/spades/$SET/contigs.fasta"; need "$CONTIGS"
-if [[ "$SKIP_BINNING" == "0" ]]; then
-  step binning "$MAIN" run binning --sample "$SET" "${FORCE_FLAG[@]}"
-fi
-step plasmids "$MAIN" run plasmids --sample "$SET" "${FORCE_FLAG[@]}"
-UNION="$ROOT/SRA/plasmids/$SET/union/plasmids_raw.fasta"; need "$UNION"
+# 2) ingest the simulation manifest (sample, fq1, fq2, group), then every module per sample
+step ingest "$MAIN" run ingest --fastq "$SIMMANI"
+for S in "${SAMPLES[@]}"; do
+  step "qc_$S"       "$MAIN" run qc       --sample "$S" "${FORCE_FLAG[@]}"
+  step "assembly_$S" "$MAIN" run assembly --sample "$S" "${FORCE_FLAG[@]}"
+  need "$ROOT/SRA/assemblies/spades/$S/contigs.fasta"
+  if [[ "$SKIP_BINNING" == "0" ]]; then
+    step "binning_$S" "$MAIN" run binning --sample "$S" "${FORCE_FLAG[@]}"
+  fi
+  step "plasmids_$S" "$MAIN" run plasmids --sample "$S" "${FORCE_FLAG[@]}"
+  need "$ROOT/SRA/plasmids/$S/union/plasmids_raw.fasta"
+done
 
-# 3) score against the truth
+# 3) score every sample against the truth
 EVAL_ENV="memamore_eval"
 micromamba env list | awk '{print $1}' | grep -qx "$EVAL_ENV" \
-  || micromamba create -y -q -n "$EVAL_ENV" -c conda-forge -c bioconda "minimap2=2.28" "python=3.11"
-mm2(){ micromamba run -n "$EVAL_ENV" minimap2 -x asm10 -t "$CPUS" --secondary=no "$REFDIR/refs/combined.fna" "$1" 2>/dev/null; }
-mm2 "$CONTIGS" > "$OUT/contigs_vs_refs.paf"
-mm2 "$UNION"   > "$OUT/plasmids_vs_refs.paf"
-micromamba run -n "$EVAL_ENV" python "$ROOT/tests/e2e/evaluate.py" \
-  --refs "$REFDIR/refs/combined.fna" --provenance "$REFDIR/truth/provenance.tsv" \
-  --contigs-paf "$OUT/contigs_vs_refs.paf" --pred-paf "$OUT/plasmids_vs_refs.paf" \
-  --out-tsv "$OUT/metrics.tsv" --out-json "$OUT/metrics.json" > /dev/null
+  || micromamba create -y -q -n "$EVAL_ENV" -c conda-forge -c bioconda "minimap2=2.28" "quast=5.2" "python=3.11"
+mm2(){ micromamba run -n "$EVAL_ENV" minimap2 -x asm10 -t "$CPUS" --secondary=no "$1" "$2" 2>/dev/null; }
+for S in "${SAMPLES[@]}"; do
+  SO="$OUT/$S"; mkdir -p "$SO"
+  CONTIGS="$ROOT/SRA/assemblies/spades/$S/contigs.fasta"
+  UNION="$ROOT/SRA/plasmids/$S/union/plasmids_raw.fasta"
+  mm2 "$REFDIR/refs/combined.fna" "$CONTIGS" > "$SO/contigs_vs_refs.paf"
+  mm2 "$REFDIR/refs/combined.fna" "$UNION"   > "$SO/plasmids_vs_refs.paf"
+  # all-vs-all of the predictions: which tools agree (consensus rows min2/min3)
+  micromamba run -n "$EVAL_ENV" minimap2 -x asm10 -X -t "$CPUS" "$UNION" "$UNION" 2>/dev/null > "$SO/plasmids_self.paf"
+  micromamba run -n "$EVAL_ENV" python "$ROOT/tests/e2e/evaluate.py" \
+    --refs "$REFDIR/refs/combined.fna" --provenance "$REFDIR/truth/provenance.tsv" \
+    --contigs-paf "$SO/contigs_vs_refs.paf" --pred-paf "$SO/plasmids_vs_refs.paf" \
+    --self-paf "$SO/plasmids_self.paf" \
+    --out-tsv "$SO/metrics.tsv" --out-json "$SO/metrics.json" > /dev/null
+  # assembly quality against the references
+  micromamba run -n "$EVAL_ENV" metaquast.py -o "$SO/metaquast" -r "$REFDIR/refs/combined.fna" \
+    -t "$CPUS" --min-contig 1000 --silent "$CONTIGS" > "$SO/metaquast.log" 2>&1 \
+    || echo "[e2e] metaquast failed for $S (see $SO/metaquast.log)"
+  # MAG quality, if binning ran
+  Q="$ROOT/SRA/binning/checkm2/$S/quality_report.tsv"
+  if [[ -s "$Q" ]]; then
+    awk -F'\t' 'NR==1{for(i=1;i<=NF;i++){if($i=="Completeness")c=i; if($i=="Contamination")k=i}; next}
+                {n++; if($c>=90&&$k<5)hq++; else if($c>=50&&$k<10)mq++}
+                END{printf "bins\t%d\nhq_mimag\t%d\nmq_mimag\t%d\n", n, hq, mq}' "$Q" > "$SO/mags.tsv"
+  fi
+done
 
-# MAG quality, if binning ran
-Q="$ROOT/SRA/binning/checkm2/$SET/quality_report.tsv"
-if [[ -s "$Q" ]]; then
-  awk -F'\t' 'NR==1{for(i=1;i<=NF;i++){if($i=="Completeness")c=i; if($i=="Contamination")k=i}; next}
-              {n++; if($c>=90&&$k<5)hq++; else if($c>=50&&$k<10)mq++}
-              END{printf "bins\t%d\nhq_mimag\t%d\nmq_mimag\t%d\n", n, hq, mq}' "$Q" > "$OUT/mags.tsv"
-fi
+# one table over all samples: sample + per-tool metrics
+first=1; : > "$OUT/metrics.tsv"
+for S in "${SAMPLES[@]}"; do
+  if [[ $first -eq 1 ]]; then sed -n 1p "$OUT/$S/metrics.tsv" | sed 's/^/sample\t/' >> "$OUT/metrics.tsv"; first=0; fi
+  tail -n +2 "$OUT/$S/metrics.tsv" | sed "s/^/$S\t/" >> "$OUT/metrics.tsv"
+done
 
 # 4) provenance for the paper: git commit + tool versions of every env
 {
@@ -103,6 +127,6 @@ for env in $(micromamba env list | awk 'NR>2 && $1!~/^#/ {print $1}'); do
 done
 
 echo "[e2e] done -> $OUT"
-column -t -s $'\t' "$OUT/metrics.tsv"
-[[ -s "$OUT/mags.tsv" ]] && column -t -s $'\t' "$OUT/mags.tsv"
-column -t -s $'\t' "$TIMES"
+show(){ if command -v column >/dev/null; then column -t -s $'\t' "$1"; else cat "$1"; fi; }
+show "$OUT/metrics.tsv"
+show "$TIMES"

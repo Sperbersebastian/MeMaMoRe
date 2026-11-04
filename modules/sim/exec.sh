@@ -4,18 +4,18 @@ set -euo pipefail
 : "${SET_NAME:?SET_NAME not set}"
 : "${N_READS:?N_READS not set}"
 : "${READ_LEN:?READ_LEN not set}"
-: "${MODEL:?MODEL not set}"   # kept for compatibility, unused by ART
+: "${PLAN:?PLAN not set}"     # tables from scripts/sim_plan.py
+: "${MODEL:=HiSeq}"           # kept for compatibility, unused by ART
 : "${CPUS:=8}"                # unused by ART
-: "${SEED:=42}"               # ART base seed (per reference: SEED + index)
+: "${SEED:=42}"               # ART base seed (per sample and reference: SEED + offset)
 
 # env helpers
 # shellcheck source=bin/lib/env.sh
 source "$ROOT/bin/lib/env.sh"
-ensure_env_by_module "sim"   # sim_env must have: art, ncbi-datasets-cli, entrez-direct, unzip, yq
+ensure_env_by_module "sim"   # sim_env must have: art, ncbi-datasets-cli, entrez-direct, unzip, yq, pyyaml
 
 REFDIR="$ROOT/refdata/testsets/$SET_NAME"
 mkdir -p "$REFDIR/refs/hosts" "$REFDIR/refs/plasmids" "$REFDIR/refs/phages" "$REFDIR/sim" "$REFDIR/truth"
-OUTREADS="$ROOT/SRA/reads/$SET_NAME"; mkdir -p "$OUTREADS"
 
 dl() {
   acc="$1"; out="$2"
@@ -35,65 +35,72 @@ dl() {
   fi
 }
 
-# downloads
-dl "$HOST_HQ" "$REFDIR/refs/hosts"
-dl "$HOST_LQ" "$REFDIR/refs/hosts"
-for p in ${PLASMIDS}; do dl "$p" "$REFDIR/refs/plasmids"; done
-for v in ${PHAGES};   do dl "$v" "$REFDIR/refs/phages";   done
+# downloads (one folder per reference type)
+while IFS=$'\t' read -r acc type _host; do
+  dl "$acc" "$REFDIR/refs/${type}s"
+done < <(tail -n +2 "$PLAN/references.tsv")
 
-# combine fasta
+# combine fasta and write the truth table per sequence record. Records keep the first word
+# of their FASTA header as name, so alignments map back to them. A record inside a genome
+# assembly (GCF_/GCA_) whose header says "plasmid" is typed plasmid with the assembly as host.
 COMBINED="$REFDIR/refs/combined.fna"; : > "$COMBINED"
-for f in "$REFDIR"/refs/hosts/*.fna "$REFDIR"/refs/plasmids/*.fna "$REFDIR"/refs/phages/*.fna; do
-  [[ -s "$f" ]] || continue
-  awk 'BEGIN{RS=">";FS="\n"} NR>1{
-         h=$1; s="";
-         for(i=2;i<=NF;i++) s=s $i;
-         split(h,a," ");
-         print ">" a[1];
-         for(i=1;i<=length(s);i+=70) print substr(s,i,70)
-       }' "$f" >> "$COMBINED"
-done
+TRUTH="$REFDIR/truth/provenance.tsv"
+printf "type\taccession\tset\thost\tsource\n" > "$TRUTH"
+while IFS=$'\t' read -r acc type host; do
+  awk -v acc="$acc" -v type="$type" -v host="$host" -v set="$SET_NAME" -v truth="$TRUTH" '
+    function flush(){ if (name != "") { print ">" name; for (i = 1; i <= length(seq); i += 70) print substr(seq, i, 70) } }
+    /^>/ { flush(); hdr = substr($0, 2); split(hdr, w, " "); name = w[1]; seq = "";
+           t = type; h = host
+           if (acc ~ /^GC[AF]_/ && tolower(hdr) ~ /plasmid/) { t = "plasmid"; h = acc }
+           printf "%s\t%s\t%s\t%s\t%s\n", t, name, set, h, acc >> truth
+           next }
+    { seq = seq $0 }
+    END { flush() }' "$REFDIR/refs/${type}s/$acc.fna" >> "$COMBINED"
+done < <(tail -n +2 "$PLAN/references.tsv")
 
-# abundances
-ABUND_FILE="$REFDIR/sim/abundances.tsv"; : > "$ABUND_FILE"
-grep "^>" "$COMBINED" | sed 's/^>//' | while read -r acc; do
-  var="ABUND_${acc//./_}"
-  w="${!var:-0.0}"
-  printf "%s\t%s\n" "$acc" "$w" >> "$ABUND_FILE"
-done
-
-# export vars for subshell
-export REFDIR ABUND_FILE N_READS READ_LEN SEED
+# per-sample weights, per configured accession (all records of an assembly share its weight)
+cp "$PLAN/weights.tsv" "$REFDIR/truth/weights.tsv"
 
 # ensure ART available
 run_in_env sim_env art_illumina --help >/dev/null 2>&1 || run_in_env sim_env micromamba install -y -n sim_env -c bioconda art
 
-# simulate reads with ART per reference based on weights
-run_in_env sim_env bash -lc '
+# one read set per sample. A single-sample config keeps the historical layout
+# SRA/reads/<set>/metagenome_R{1,2}.fastq.gz; every sample of a run belongs to group <set>.
+MANIFEST="$REFDIR/sim/manifest.tsv"
+printf "sample\tfq1\tfq2\tgroup\n" > "$MANIFEST"
+sidx=0
+while read -r sample; do
+  sidx=$((sidx + 1))
+  OUT="$REFDIR/sim/$sample/metagenome"; mkdir -p "$(dirname "$OUT")"
+  ABUND_FILE="$REFDIR/sim/$sample/abundances.tsv"
+  awk -F'\t' -v s="$sample" 'NR>1 && $1==s {print $2"\t"$3}' "$PLAN/weights.tsv" > "$ABUND_FILE"
+  export REFDIR ABUND_FILE N_READS READ_LEN SEED OUT
+  export SEED_OFFSET=$(( (sidx - 1) * 1000 ))
+
+  # simulate reads with ART per reference based on weights
+  run_in_env sim_env bash -lc '
 set -euo pipefail
-OUT="$REFDIR/sim/metagenome"
 rm -f "${OUT}_R1.fastq" "${OUT}_R2.fastq" || true
 idx=0
-
 while read -r acc w; do
-  [[ -z "${w:-}" || "$w" == "0.0" ]] && continue
+  idx=$((idx + 1))
+  [[ -z "${w:-}" ]] && continue
+  awk -v w="$w" "BEGIN{exit !(w+0 > 0)}" || continue
 
   # locate fasta
-  f="$REFDIR/refs/${acc}.fna"
-  [[ -s "$f" ]] || f="$(ls "$REFDIR"/refs/*/"${acc}.fna" 2>/dev/null | head -n1 || true)"
+  f="$(ls "$REFDIR"/refs/*/"${acc}.fna" 2>/dev/null | head -n1 || true)"
   [[ -s "$f" ]] || { echo "[err] fasta for $acc not found"; exit 1; }
 
   # genome size
-  gs=$(awk "/^>/{if(n)print n; n=0; next}{n+=length} END{print n}" "$f")
+  gs=$(awk "/^>/{next}{n+=length} END{print n}" "$f")
   [[ "$gs" -gt 0 ]] || { echo "[err] zero length for $acc"; exit 1; }
 
   # per-ref fold to match N_READS * 2 * READ_LEN * weight / gs
   fold=$(awk -v n="$N_READS" -v L="$READ_LEN" -v w="$w" -v gs="$gs" \
          "BEGIN{printf \"%.6f\", (n*2*L*w)/gs}")
 
-  # fixed seed per reference so the same config always yields identical reads
-  idx=$((idx + 1))
-  art_illumina -ss HS25 -na -p -l '"$READ_LEN"' -f "$fold" -m 300 -s 30 -rs $((SEED + idx)) \
+  # fixed seed per sample and reference so the same config always yields identical reads
+  art_illumina -ss HS25 -na -p -l "$READ_LEN" -f "$fold" -m 300 -s 30 -rs $((SEED + SEED_OFFSET + idx)) \
     -i "$f" -o "$OUT.$acc." >/dev/null
 done < "$ABUND_FILE"
 
@@ -117,17 +124,12 @@ fi
 rm -f "$OUT".*.1.fq "$OUT".*.2.fq || true
 '
 
-# link outputs
-ln -sf "$REFDIR/sim/metagenome_R1.fastq.gz" "$OUTREADS/metagenome_R1.fastq.gz"
-ln -sf "$REFDIR/sim/metagenome_R2.fastq.gz" "$OUTREADS/metagenome_R2.fastq.gz"
+  # link outputs
+  OUTREADS="$ROOT/SRA/reads/$sample"; mkdir -p "$OUTREADS"
+  ln -sf "${OUT}_R1.fastq.gz" "$OUTREADS/metagenome_R1.fastq.gz"
+  ln -sf "${OUT}_R2.fastq.gz" "$OUTREADS/metagenome_R2.fastq.gz"
+  printf "%s\t%s\t%s\t%s\n" "$sample" "${OUT}_R1.fastq.gz" "${OUT}_R2.fastq.gz" "$SET_NAME" >> "$MANIFEST"
+  echo "[sim] $sample -> $OUTREADS/metagenome_R{1,2}.fastq.gz"
+done < <(tail -n +2 "$PLAN/weights.tsv" | cut -f1 | awk '!seen[$0]++')
 
-# provenance
-{
-  printf "type\taccession\tset\n"
-  printf "host\t%s\t%s\n" "$HOST_HQ" "$SET_NAME"
-  printf "host\t%s\t%s\n" "$HOST_LQ" "$SET_NAME"
-  for p in ${PLASMIDS}; do printf "plasmid\t%s\t%s\n" "$p" "$SET_NAME"; done
-  for v in ${PHAGES};   do printf "phage\t%s\t%s\n"   "$v" "$SET_NAME"; done
-} > "$REFDIR/truth/provenance.tsv"
-
-echo "[sim] done -> $OUTREADS/metagenome_R{1,2}.fastq.gz"
+echo "[sim] done: $sidx sample(s), manifest $MANIFEST"

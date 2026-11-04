@@ -301,18 +301,46 @@ CI (`.github/workflows/ci.yml`) runs this on every push/PR.
 
 ### End-to-end test with ground truth
 
-`tests/e2e/run_e2e.sh` simulates reads from known references (`config/sim.yaml`, set `miniset`:
-*E. coli* K-12, *P. aeruginosa* PAO1, 3 plasmids, 3 phages, fixed seed), runs
-ingest → QC → assembly → binning → plasmids, aligns contigs and plasmid predictions back to the
-references and scores every plasmid tool (and their union) by precision, recall and F1.
+`tests/e2e/run_e2e.sh` simulates reads from known references (default `config/sim.yaml`, set
+`miniset`: *E. coli* K-12, *P. aeruginosa* PAO1, 3 plasmids, 3 phages, fixed seed; or any extended
+config with several samples), runs ingest → QC → assembly → binning → plasmids for every sample,
+aligns contigs and plasmid predictions back to the references and scores every plasmid tool, their
+union and the consensus of ≥ 2 and ≥ 3 tools by precision, recall and F1. MetaQUAST measures the
+assemblies against the references.
 
 ```bash
 tests/e2e/run_e2e.sh                      # full run
 tests/e2e/run_e2e.sh --skip-binning       # faster, without binning/GTDB-Tk
 ```
 
-Results land in `tests/e2e/results/<set>/` (`metrics.tsv`, `mags.tsv`, `timings.tsv`,
-`versions.tsv`, one lockfile per environment). The run needs the module databases and is not part of CI.
+Results land in `tests/e2e/results/<set>/` (`metrics.tsv` over all samples, `timings.tsv`,
+`versions.tsv`, truth and weights, one lockfile per environment; per sample `metrics.json`,
+`mags.tsv`, `metaquast/`). The run needs the module databases and is not part of CI.
+
+### Simulated test sets with several samples and plasmid hosts
+
+`bin/main.sh run sim` reads the legacy format (`config/sim.yaml`: `hosts`, `plasmids`, `phages`,
+`abundances`) or an extended format that lists references with an optional host and generates
+several samples with different abundance profiles:
+
+```yaml
+set_name: gradient10
+read_len: 150
+n_reads: 2000000
+seed: 42
+references:
+  - {acc: GCF_000005845.2, type: host, abundance: 0.30}     # assembly: its plasmids become plasmid records
+  - {acc: NC_002516.2, type: host, abundance: 0.10}
+  - {acc: NC_013353.1, type: plasmid, host: NC_002516.2, abundance: 0.01}
+  - {acc: NC_001416.1, type: phage, abundance: 0.01}
+profiles: {n: 6, sigma: 1.0, copy_sigma: 0.2}            # optional: 6 samples, log-normal abundances
+```
+
+A plasmid or phage with a host follows its host's abundance across samples (with `copy_sigma`
+noise), as in real communities. Outputs: reads per sample under `SRA/reads/<set>_s<i>/`, a
+manifest with `group = <set>` for every sample (`refdata/testsets/<set>/sim/manifest.tsv`), and a
+truth table per sequence record with type and host (`truth/provenance.tsv`).
+`tests/sim/run.sh` tests the module with fake download and ART tools (also in CI).
 
 ### Unit tests
 

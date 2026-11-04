@@ -32,7 +32,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install flask flake8 pytest
+      - run: pip install flask flake8 pytest pyyaml
       - name: py_compile
         run: git ls-files -z '*.py' | xargs -0 python -m py_compile
       - name: flake8 (errors only)
@@ -59,6 +59,8 @@ jobs:
         run: STUB_WORK="$RUNNER_TEMP/stub" tests/stub/run.sh
       - name: re-run resumes without errors
         run: STUB_WORK="$RUNNER_TEMP/stub" tests/stub/run.sh
+      - name: simulation module (fake downloads and ART; legacy and multi-sample configs)
+        run: SIM_WORK="$RUNNER_TEMP/sim" tests/sim/run.sh
       - name: GUI shows results for every module
         run: python tests/stub/check_gui.py "$RUNNER_TEMP/stub"
       - name: optional steps may fail or find nothing (COMEBin crash, no Binny bins, no circular plasmids)

@@ -80,3 +80,38 @@ def test_unassigned_counts_as_false_positive(tmp_path):
 def test_merged_length():
     assert evaluate.merged_length([(0, 10), (5, 20), (30, 40)]) == 30
     assert evaluate.merged_length([]) == 0
+
+
+def test_consensus_rows(tmp_path):
+    build(tmp_path)
+    # genomad|c1 and plasme|c2 do not overlap; add a third tool agreeing with genomad|c1 only
+    (tmp_path / "pred.paf").write_text(paf(
+        ("genomad|c1", 2500, 0, 2500, "PL1", 4000, 0, 2500),
+        ("mobrecon|r1", 2400, 0, 2400, "PL1", 4000, 50, 2450),
+        ("genomad|c3", 5000, 0, 5000, "CHR", 10000, 0, 5000),
+        ("plasme|c2", 1500, 0, 1500, "PL1", 4000, 2500, 4000),
+    ))
+    # all-vs-all: genomad|c1 ~ mobrecon|r1 agree (>= 50 % of the shorter); a short hit c3 ~ c2 does not
+    (tmp_path / "self.paf").write_text(paf(
+        ("genomad|c1", 2500, 0, 2400, "mobrecon|r1", 2400, 0, 2400),
+        ("genomad|c3", 5000, 0, 300, "plasme|c2", 1500, 0, 300),
+    ))
+    out = tmp_path / "m.json"
+    evaluate.main([
+        "--refs", str(tmp_path / "refs.fna"), "--provenance", str(tmp_path / "prov.tsv"),
+        "--contigs-paf", str(tmp_path / "contigs.paf"), "--pred-paf", str(tmp_path / "pred.paf"),
+        "--self-paf", str(tmp_path / "self.paf"),
+        "--out-tsv", str(tmp_path / "m.tsv"), "--out-json", str(out),
+    ])
+    t = {r["tool"]: r for r in json.loads(out.read_text())["tools"]}
+    assert t["min2"]["n_predicted"] == 2          # genomad|c1 + mobrecon|r1
+    assert t["min2"]["precision_bp"] == 1.0       # the chromosome false positive is gone
+    assert t["min3"]["n_predicted"] == 0
+    assert t["union"]["n_predicted"] == 4
+
+
+def test_provenance_with_host_column(tmp_path):
+    (tmp_path / "prov.tsv").write_text(
+        "type\taccession\tset\thost\tsource\nhost\tCHR\tt\t\tCHR\nplasmid\tPL1\tt\tCHR\tPL1\nplasmid\tPL2\tt\tCHR\tPL2\n")
+    types = evaluate.read_provenance(str(tmp_path / "prov.tsv"))
+    assert types == {"CHR": "host", "PL1": "plasmid", "PL2": "plasmid"}
