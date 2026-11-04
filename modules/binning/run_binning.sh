@@ -45,7 +45,7 @@ env_has(){ "$MM" run -n "$ENV_MAIN" bash -lc "command -v '$1' >/dev/null"; }
 ENV_MAIN="${ENV_MAIN:-env_binning}"
 REQ_PKGS=(metabat2 snakemake yq checkm2 gtdbtk barrnap tRNAscan-SE samtools)
 
-env_exists() { "$MM" env list | awk '{print $1}' | grep -qx "$ENV_MAIN"; }
+env_exists() { "$MM" env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx "$ENV_MAIN"; }
 have_in_env(){ "$MM" run -n "$ENV_MAIN" bash -lc "command -v '$1' >/dev/null"; }
 pkg_bin(){ case "$1" in metabat2) echo jgi_summarize_bam_contig_depths;; tRNAscan-SE) echo tRNAscan-SE;; *) echo "$1";; esac; }
 

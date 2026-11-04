@@ -123,7 +123,8 @@ _resolve_creator(){
   return 1
 }
 
-_list_env_names(){ micromamba env list | awk 'NR>2{print $1}' | sed '/^$/d'; }
+# names from --json: the table view shows no names for envs outside the first envs_dirs entry
+_list_env_names(){ micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##'; }
 
 _env_exists(){
   local name="$1"

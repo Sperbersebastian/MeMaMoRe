@@ -12,7 +12,7 @@ command -v micromamba >/dev/null 2>&1 || { echo "[err] micromamba not found"; ex
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FORCE_CLEAN="${FORCE_CLEAN:-0}"
 
-env_exists(){ micromamba env list | awk 'NR>2{print $1}' | grep -qx "$1"; }
+env_exists(){ micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx "$1"; }
 
 for tool in deeparg rgi amrplusplus abricate; do
   env="${tool}_env"

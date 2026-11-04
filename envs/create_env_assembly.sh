@@ -8,14 +8,14 @@ eval "$(micromamba shell hook --shell=bash)"
 CH="-c conda-forge -c bioconda --channel-priority flexible"
 
 # env_assembly_core → SPAdes (and python)
-if micromamba env list | awk 'NR>2{print $1}' | grep -qx env_assembly_core; then
+if micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx env_assembly_core; then
   micromamba install -y -n env_assembly_core $CH python=3.10 spades
 else
   micromamba create  -y -n env_assembly_core $CH python=3.10 spades
 fi
 
 # env_mapping_coverm → mapping + coverage tools
-if micromamba env list | awk 'NR>2{print $1}' | grep -qx env_mapping_coverm; then
+if micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx env_mapping_coverm; then
   micromamba install -y -n env_mapping_coverm $CH python=3.10 bwa-mem2 samtools coverm
 else
   micromamba create  -y -n env_mapping_coverm $CH python=3.10 bwa-mem2 samtools coverm
