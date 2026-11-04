@@ -165,6 +165,10 @@ run_binning(){
     ROOT="$ROOT" SAMPLE="$SID" bash "$ROOT/modules/binning/qc_checkm2/exec.sh"
     ROOT="$ROOT" SAMPLE="$SID" bash "$ROOT/modules/binning/qc_rrna_trna/exec.sh"
 
+    # ---- optional Bakta annotation of the MAGs (modules.binning.bakta, default off) ----
+    ROOT="$ROOT" SAMPLE="$SID" PARAMS_YAML="$PARAMS_YAML" CPUS="$CPUS" FORCE="${FORCE:-0}" \
+      bash "$ROOT/modules/binning/bakta/exec.sh" || echo "[bakta] $SID failed (see logs/binning_bakta_${SID}.log); continuing"
+
     # ---- Taxonomy ----
     ROOT="$ROOT" SAMPLE="$SID" bash "$ROOT/modules/binning/gtdbtk/exec.sh"
 

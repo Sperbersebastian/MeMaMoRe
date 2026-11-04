@@ -34,6 +34,8 @@ modules:
     semibin2_environment: ""    # "" = self-supervised; or a pre-trained habitat (e.g. human_gut)
     # GUNC chimerism check after MAGScoT; gunc_pass feeds the MAG quality tier
     gunc: true
+    bakta: false                # optional Bakta annotation of the refined MAGs
+    bakta_db: light             # light (~3.4 GB) | full (~71 GB), fetched into refdata/bakta
   catalog:
     # project MAG catalog (bin/main.sh run catalog): dRep v4 with skani
     ani: 0.95                   # secondary clustering ANI (species level)

@@ -951,6 +951,22 @@ def blastn():
     write(opt("-out"), "\n".join(rows) + ("\n" if rows else ""))
 
 
+
+def bakta():
+    """bakta --db D --prefix P --output O MAG.fa -> O/P.{gff3,faa,tsv}"""
+    out, pfx = mkdir(opt("--output", "-o")), opt("--prefix", "-p")
+    fa = positional(skip_values_for=("--db", "--prefix", "-p", "--output", "-o", "--threads", "-t"))[-1]
+    ids = read_fasta_ids(fa)
+    write(out / f"{pfx}.gff3", "##gff-version 3\n" + "".join(f"{c}\tBakta\tCDS\t1\t300\t.\t+\t0\tID={pfx}_{i}\n" for i, c in enumerate(ids)))
+    write(out / f"{pfx}.tsv", "#Sequence Id\tType\tStart\tStop\tStrand\tLocus Tag\tGene\tProduct\n")
+    write(out / f"{pfx}.faa", "".join(f">{pfx}_{i}\nMAAA\n" for i, _ in enumerate(ids)))
+
+
+def bakta_db():
+    if ARGS[:1] == ["download"]:
+        write(Path(opt("--output", "-o")) / "db-light" / "version.json", '{"type": "light"}\n')
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -967,6 +983,7 @@ HANDLERS = {
     "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2, "amrfinder": amrfinder, "argnorm": argnorm,
     "integron_finder": integron_finder, "isescan.py": isescan, "diamond": diamond, "dRep": drep,
     "minced": minced, "makeblastdb": makeblastdb, "blastn": blastn,
+    "bakta": bakta, "bakta_db": bakta_db,
 }
 
 if __name__ == "__main__":
