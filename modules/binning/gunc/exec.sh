@@ -15,9 +15,8 @@ GENES="$ROOT/SRA/assemblies/genes/$SAMPLE/genes.faa"
 LOG="$ROOT/logs/binning_gunc_${SAMPLE}.log"
 mkdir -p "$OUT" "$ROOT/logs"
 
-cfg(){ local v=""; [[ -n "${PARAMS_YAML:-}" && -s "$PARAMS_YAML" ]] && \
-         v="$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" --defaults "$PARAMS_YAML" --get "$1" 2>/dev/null || true)"
-       [[ -n "$v" && "$v" != "None" && "$v" != "null" ]] && echo "$v" || echo "$2"; }
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
 case "$(cfg modules.binning.gunc true)" in
   false|False|0|no) echo "[gunc] disabled (modules.binning.gunc: false)"; exit 0 ;;
 esac

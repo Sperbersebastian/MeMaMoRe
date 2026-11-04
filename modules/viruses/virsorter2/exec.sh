@@ -29,13 +29,16 @@ if [[ ! -d "$VS2_DB" || ! -f "$VS2_DB/Done_all_setup" ]]; then
 fi
 
 # VirSorter2 run (all groups, include-groups recommended for metagenomes)
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+MINLEN="$(cfg modules.viruses.min_len 1000)"
 cmd=( virsorter run
   -i "$IN"
   -w "$OUT"
   -d "$VS2_DB"
   --include-groups "dsDNAphage,NCLDV,RNA,ssDNA,lavidaviridae"
   -j "$CPUS"
-  --min-length 1000
+  --min-length "$MINLEN"
   all
 )
 echo "[vs2] ${cmd[*]}"

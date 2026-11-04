@@ -25,6 +25,9 @@ if [[ -s "$DONE" ]]; then echo "[hotspot] cached"; exit 0; fi
 # Per-sample temp/results dirs: never write into the shared HOTSPOT checkout
 # (concurrent samples would overwrite each other's results there)
 TMPD="$OUT/temp"; RES="$OUT/results"
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+HS_MIN_LEN="$(cfg modules.plasmids.hotspot_min_len 1500)"
 rm -rf "$TMPD" "$RES"
 pushd "$HOTSPOT_DIR" >/dev/null
 
@@ -34,6 +37,7 @@ python preprocessing.py \
   --database "$HOTSPOT_DB" \
   --model_path "$HOTSPOT_MODELS" \
   --midfolder "$TMPD" \
+  --len "$HS_MIN_LEN" \
   --threads "$CPUS"
 
 # Step 2: prediction (falls back to CPU when no GPU is present)

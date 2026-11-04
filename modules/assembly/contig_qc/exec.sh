@@ -28,7 +28,8 @@ ts(){ date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 echo "{\"ts\":\"$(ts)\",\"module\":\"assembly\",\"program\":\"contig_qc\",\"sample\":\"$SAMPLE\",\"phase\":\"start\"}" >> "$EVENTS"
 
 # --- assembly fasta (prefer len-filtered) ---
-REF="$OUTBASE/contigs.len1000.fasta"; [[ -s "$REF" ]] || REF="$OUTBASE/contigs.fasta"
+MINLEN=$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" --defaults "$PARAMS_YAML" --get global.contig_min_len)
+REF="$OUTBASE/contigs.len${MINLEN}.fasta"; [[ -s "$REF" ]] || REF="$OUTBASE/contigs.fasta"
 [[ -s "$REF" ]] || { echo "[contig_qc] no assembly for $SAMPLE" >&2; exit 2; }
 
 # --- choose reads (test fallback to raw if missing) ---

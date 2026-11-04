@@ -13,12 +13,10 @@ LRAW="$SOUT/plasmids_raw.fasta"
 REP_OUT="$SOUT/plasmids_derep.$SAMPLE.fasta"
 GCONCAT="$GOUT/plasmids_concat.all_samples.fasta"
 
-MIN_LEN="${MIN_LEN:-2000}"
-
 # config (merged PARAMS_YAML from bin/main.sh; defaults when run standalone)
-cfg(){ local v=""; [[ -n "${PARAMS_YAML:-}" && -s "$PARAMS_YAML" ]] && \
-         v="$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" --defaults "$PARAMS_YAML" --get "$1" 2>/dev/null || true)"
-       [[ -n "$v" && "$v" != "None" && "$v" != "null" ]] && echo "$v" || echo "$2"; }
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+MIN_LEN="${MIN_LEN:-$(cfg modules.plasmids.min_len 2000)}"
 CONSENSUS="$(cfg modules.plasmids.consensus union)"
 MIN_OV="$(cfg modules.plasmids.consensus_min_overlap 0.5)"
 case "$CONSENSUS" in

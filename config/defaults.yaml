@@ -1,6 +1,6 @@
 global:
   threads: 8
-  contig_min_len: 1000
+  contig_min_len: 1000          # assembly filter, contig QC, gene calls (genes.faa)
   ani: 95
   cov: 85
 
@@ -22,6 +22,7 @@ modules:
       breadth_min: 0.8
       depth_min: 2.0
   binning:
+    min_contig_len: 1500        # MetaBAT2 (hard floor 1500) and Binny
     # GUNC chimerism check after MAGScoT; gunc_pass feeds the MAG quality tier
     gunc: true
   plasmids:
@@ -30,3 +31,8 @@ modules:
     # >= consensus_min_overlap of their length by the other tools' candidates
     consensus: union
     consensus_min_overlap: 0.5
+    min_len: 2000               # plasmid candidates entering union/clustering
+    plasme_min_len: 0           # PLASMe post-filter (0 = off)
+    hotspot_min_len: 1500       # HOTSPOT host prediction input
+  viruses:
+    min_len: 1000               # VirSorter2 --min-length, VIBRANT -l

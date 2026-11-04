@@ -117,6 +117,20 @@ Missing environments are also created on first use. Reference databases live in
 ~300 GB disk (plus ~340 GB for the optional iPHoP DB), and ≥64 GB RAM for
 GTDB-Tk (skipped with a message on smaller machines, `GTDBTK_FORCE=1` overrides).
 
+### Length cut-offs
+
+All minimum lengths are read from `config/defaults.yaml` (override in `config/local.yaml`
+or per run with `--set key=value`):
+
+| Key | Default | Used by |
+| --- | ---: | --- |
+| `global.contig_min_len` | 1000 bp | assembly filter (`contigs.len<N>.fasta`), contig QC mapping, central gene calls (`genes.faa/.ffn/.gff`), MetaBAT2 input |
+| `modules.binning.min_contig_len` | 1500 bp | MetaBAT2 `--minContig` (hard floor 1500), Binny |
+| `modules.plasmids.min_len` | 2000 bp | plasmid candidates entering union/consensus and clustering |
+| `modules.plasmids.plasme_min_len` | 0 (off) | PLASMe post-filter |
+| `modules.plasmids.hotspot_min_len` | 1500 bp | HOTSPOT host prediction input |
+| `modules.viruses.min_len` | 1000 bp | VirSorter2 `--min-length`, VIBRANT `-l` |
+
 ---
 
 ## **Usage**

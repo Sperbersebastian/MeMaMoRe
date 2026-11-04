@@ -5,10 +5,9 @@ module_default_params(){ cat <<'YAML'
 modules:
   binning:
     cpus: 8
-    min_contig_len: 1500
+    min_contig_len: 1500        # MetaBAT2 (>= 1500 enforced) and Binny
     metabat2:
       minCv: 0.5
-      minContig: 1500
     checkm2:
       completeness_min: 50
       contamination_max: 10
@@ -35,6 +34,9 @@ run_binning(){
   CPUS="$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" \
            --defaults "$PARAMS_YAML" --get modules.binning.cpus 2>/dev/null || echo 8)"
 
+  GMINLEN="$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" \
+           --defaults "$PARAMS_YAML" --get global.contig_min_len 2>/dev/null || echo 1000)"
+
   # ---- iterate manifest (sample \t fq1 \t fq2?) ----
   tail -n +2 "$MANIFEST" | tr -d '\r' | while IFS=$'\t' read -r SID FQ1 FQ2 || [[ -n "${SID:-}" ]]; do
     [[ -z "${SID:-}" ]] && continue
@@ -48,7 +50,7 @@ run_binning(){
 
     # choose contigs (filtered preferred)
     local CONTIGS="$QC_DIR/contigs.filtered.fasta"
-    [[ -s "$CONTIGS" ]] || CONTIGS="$ASM_DIR/contigs.len1000.fasta"
+    [[ -s "$CONTIGS" ]] || CONTIGS="$ASM_DIR/contigs.len${GMINLEN}.fasta"
     [[ -s "$CONTIGS" ]] || CONTIGS="$ASM_DIR/contigs.fasta"
     [[ -s "$CONTIGS" ]] || { echo "[binning] $SID no contigs found"; continue; }
 

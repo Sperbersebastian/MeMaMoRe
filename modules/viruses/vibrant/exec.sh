@@ -41,13 +41,16 @@ done
 # VIBRANT expects the input basename for output naming
 IN_BASE="$(basename "$IN" .fasta)"
 
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+MINLEN="$(cfg modules.viruses.min_len 1000)"
 cmd=( VIBRANT_run.py
   -i "$IN"
   -folder "$OUT"
   -d "$DBD"
   -m "$VIBRANT_DB/files"
   -t "$CPUS"
-  -l 1000
+  -l "$MINLEN"
 )
 echo "[vibrant] ${cmd[*]}"
 "${cmd[@]}"
