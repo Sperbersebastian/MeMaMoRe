@@ -20,7 +20,8 @@ for src in \
   "$ROOT/SRA/viruses/$SAMPLE/viralverify/viralverify_viruses.fasta" \
   "$ROOT/SRA/viruses/$SAMPLE/genomad/viruses.fna" \
   "$ROOT/SRA/viruses/$SAMPLE/virsorter2/viruses.fasta" \
-  "$ROOT/SRA/viruses/$SAMPLE/vibrant/viruses.fasta"
+  "$ROOT/SRA/viruses/$SAMPLE/vibrant/viruses.fasta" \
+  "$ROOT/SRA/viruses/$SAMPLE/deepvirfinder/viruses.fasta"
 do
   if [[ -s "$src" ]]; then
     echo "[virus-union] adding $(basename "$(dirname "$src")"): $(grep -c '^>' "$src" || echo 0) seqs"

@@ -81,6 +81,7 @@ _env_name(){
     metaviralspades)        echo "env_assembly_core" ;;
     virsorter2)             echo "virsorter2_env" ;;
     vibrant)                echo "vibrant_env" ;;
+    deepvirfinder)          echo "dvf_env" ;;
     union_virus)            echo "plasmids_core" ;;
     checkv)                 echo "checkv_env" ;;
     iphop)                  echo "iphop_env" ;;
@@ -122,6 +123,7 @@ _resolve_creator(){
     amrfinderplus) echo "$ROOT/envs/create_env_amrfinder.sh"; return 0 ;;
     mge|mobileog)  echo "$ROOT/envs/create_env_mge.sh"; return 0 ;;
     catalog)       echo "$ROOT/envs/create_env_drep.sh"; return 0 ;;
+    deepvirfinder) echo "$ROOT/envs/create_env_dvf.sh"; return 0 ;;
     # ARG substeps: summary_args reuses deeparg env
     summary_args)
       [[ -s "$ROOT/envs/create_env_deeparg.sh" ]] && { echo "$ROOT/envs/create_env_deeparg.sh"; return 0; }
@@ -154,7 +156,8 @@ _env_exists(){
     _list_env_names | grep -qx genomad_env       &&
     _list_env_names | grep -qx virsorter2_env    &&
     _list_env_names | grep -qx vibrant_env       &&
-    _list_env_names | grep -qx checkv_env
+    _list_env_names | grep -qx checkv_env        &&
+    _list_env_names | grep -qx dvf_env
   elif [[ "$name" == "env_args" ]]; then
     _list_env_names | grep -qx deeparg_env      &&
     _list_env_names | grep -qx rgi_env           &&
@@ -180,7 +183,7 @@ _recreate_env(){
 list_env_specs(){
   for m in ingest qc assembly binning sra_tools sim mapping_coverm coverm plasmids \
            viralverify plasme genomad mobrecon plasmer typer cluster union_cluster typing_hotspot \
-           viruses virsorter2 vibrant checkv iphop \
+           viruses virsorter2 vibrant deepvirfinder checkv iphop \
            args deeparg rgi amrplusplus abricate amrfinderplus mge mobileog summary_args catalog; do
     local env create
     env="$(_env_name "$m")"
@@ -287,7 +290,7 @@ remove_env_by_module(){
       ;;
     env_viruses)
       # shared envs (assembly/plasmids) are left in place
-      for e in virsorter2_env vibrant_env checkv_env; do
+      for e in virsorter2_env vibrant_env checkv_env dvf_env; do
         micromamba env remove -n "$e" -y || true
       done
       ;;

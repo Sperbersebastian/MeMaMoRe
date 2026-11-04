@@ -26,7 +26,7 @@ for e in env_assembly_core viralverify_env genomad_env plasmids_core; do
 done
 
 # --- virus-specific envs ---
-for tool in virsorter2 vibrant checkv; do
+for tool in virsorter2 vibrant checkv dvf; do
   env="${tool}_env"
   if [[ "$FORCE_CLEAN" == "1" ]] && env_exists "$env"; then
     micromamba env remove -y -n "$env"
@@ -38,4 +38,4 @@ for tool in virsorter2 vibrant checkv; do
   fi
 done
 
-echo "[creator] ensured: env_assembly_core viralverify_env genomad_env plasmids_core virsorter2_env vibrant_env checkv_env"
+echo "[creator] ensured: env_assembly_core viralverify_env genomad_env plasmids_core virsorter2_env vibrant_env checkv_env dvf_env"

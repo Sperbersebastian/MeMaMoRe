@@ -66,6 +66,9 @@ modules:
     virsorter2_min_score: 0.5   # VirSorter2 --min-score (its default)
     vibrant_min_orfs: 4         # VIBRANT -o (its default, can only be increased)
     vibrant_virome: false       # VIBRANT -virome for virome (VLP) samples
+    deepvirfinder: true         # DeepVirFinder as 5th predictor (dvf_env, CPU)
+    dvf_min_score: 0.9          # keep contigs with score >= this ...
+    dvf_max_p: 0.05             # ... and p-value < this
   args:
     mge: true                   # ISEScan + IntegronFinder 2 for ARG context
     is_window: 5000             # bp: ARG counts as "near IS" within this distance

@@ -11,7 +11,7 @@ case "${1:-}" in
         for e in base env_ingest env_qc_core env_qc_mqc env_assembly_core env_mapping_coverm \
                  env_binning env_sra_tools sim_env comebin_env gui_env plasmids_core genomad_env \
                  plasme_env viralverify_env mobsuite_env hotspot_env stampede_env virsorter2_env \
-                 vibrant_env checkv_env deeparg_env rgi_env amrplusplus_env abricate_env iphop_env gunc_env hostile_env plasmer_env semibin_env amrfinder_env mge_env drep_env crispr_env; do
+                 vibrant_env checkv_env deeparg_env rgi_env amrplusplus_env abricate_env iphop_env gunc_env hostile_env plasmer_env semibin_env amrfinder_env mge_env drep_env crispr_env dvf_env; do
           if [[ $json == 1 ]]; then printf '        "/stub/envs/%s",\n' "$e"; else printf '%s\t\t%s\n' "$e" "/stub/envs/$e"; fi
         done
         [[ $json == 1 ]] && printf '        "/stub/envs/_end"\n    ]\n}\n'
