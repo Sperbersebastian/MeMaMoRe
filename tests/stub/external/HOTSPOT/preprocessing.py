@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Stub HOTSPOT preprocessing: remember the input FASTA for hotspot.py."""
-import argparse, os
+import argparse
+import os
+
 p = argparse.ArgumentParser()
-p.add_argument("--fasta"); p.add_argument("--database"); p.add_argument("--model_path")
+for opt in ("--fasta", "--database", "--model_path", "--threads", "--len"):
+    p.add_argument(opt)
+p.add_argument("--midfolder", default="temp")
 a = p.parse_args()
-os.makedirs("results", exist_ok=True)
-open("results/.input", "w").write(a.fasta)
+os.makedirs(a.midfolder, exist_ok=True)
+with open(os.path.join(a.midfolder, "input.txt"), "w") as f:
+    f.write(a.fasta)

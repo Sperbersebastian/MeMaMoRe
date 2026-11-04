@@ -103,7 +103,7 @@ run_binning(){
       "$ROOT/SRA/binning/binny/$SID/contigs_to_bin.with_set.tsv" \
       "$ROOT/SRA/binning/comebin/$SID/contigs_to_bin.with_set.tsv"
     do
-      [[ -s "$f" ]] && cat "$f" >> "$MAGSCOT_IN"
+      if [[ -s "$f" ]]; then cat "$f" >> "$MAGSCOT_IN"; fi
     done
     [[ -s "$MAGSCOT_IN" ]] || { echo "[magscot] $SID no bin inputs"; continue; }
 

@@ -22,25 +22,34 @@ if [[ "$FORCE" == "1" ]]; then rm -f "$DONE"; fi
 if [[ -s "$DONE" ]]; then echo "[hotspot] cached"; exit 0; fi
 
 # Run HOTSPOT in repo working directory, then collect outputs into $OUT
+# Per-sample temp/results dirs: never write into the shared HOTSPOT checkout
+# (concurrent samples would overwrite each other's results there)
+TMPD="$OUT/temp"; RES="$OUT/results"
+rm -rf "$TMPD" "$RES"
 pushd "$HOTSPOT_DIR" >/dev/null
 
 # Step 1: preprocessing (encodes sequences)
 python preprocessing.py \
   --fasta "$IN" \
   --database "$HOTSPOT_DB" \
-  --model_path "$HOTSPOT_MODELS"
+  --model_path "$HOTSPOT_MODELS" \
+  --midfolder "$TMPD" \
+  --threads "$CPUS"
 
-# Step 2: prediction
-python hotspot.py
+# Step 2: prediction (falls back to CPU when no GPU is present)
+python hotspot.py \
+  --model_path "$HOTSPOT_MODELS" \
+  --midfolder "$TMPD" \
+  --out "$RES" \
+  --threads "$CPUS"
 
 popd >/dev/null
 
 # Collect outputs
-if [[ -s "$HOTSPOT_DIR/results/host_lineage.tsv" ]]; then
-  cp -f "$HOTSPOT_DIR/results/host_lineage.tsv" "$OUT/host_lineage.tsv"
-  rsync -a "$HOTSPOT_DIR/results/" "$OUT/results/" >/dev/null 2>&1 || true
+if [[ -s "$RES/host_lineage.tsv" ]]; then
+  cp -f "$RES/host_lineage.tsv" "$OUT/host_lineage.tsv"
   date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"
   echo "[hotspot] done -> $OUT/host_lineage.tsv"
 else
-  echo "[hotspot] prediction results not found in $HOTSPOT_DIR/results"; exit 6
+  echo "[hotspot] prediction results not found in $RES"; exit 6
 fi

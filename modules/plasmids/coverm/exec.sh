@@ -52,7 +52,7 @@ else
   # paired-end: pair by index; support multi-lane
   [[ ${#R1[@]} -eq ${#R2[@]} ]] || { echo "[coverm] R1/R2 count mismatch"; exit 3; }
   for i in "${!R1[@]}"; do
-    [[ -s "${R1[$i]}" && -s "${R2[$i]}" ]] && args+=( --coupled "${R1[$i]}" "${R2[$i]}" )
+    if [[ -s "${R1[$i]}" && -s "${R2[$i]}" ]]; then args+=( --coupled "${R1[$i]}" "${R2[$i]}" ); fi
   done
 fi
 

@@ -41,7 +41,7 @@ echo "[vv] ${cmd[*]}"
 # Outputs normalisieren
 pl_out=""
 for f in "$OUT"/predicted_plasmids.fasta "$OUT"/plasmid_contigs.fasta "$OUT"/plasmids.fasta; do
-  [[ -s "$f" ]] && { pl_out="$f"; break; }
+  if [[ -s "$f" ]]; then pl_out="$f"; break; fi
 done
 [[ -n "$pl_out" ]] && ln -sf "$(basename "$pl_out")" "$OUT/viralverify_plasmids.fasta" || \
   echo "[vv] WARNING: no plasmid fasta found in $OUT"

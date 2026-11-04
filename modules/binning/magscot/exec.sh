@@ -95,7 +95,7 @@ normalize_map "$CB_MAP" comebin
 RAW_NORM="$OUT/contigs_to_bin.raw.norm.tsv"
 : > "$RAW_NORM"
 for f in "$MB_MAP" "$BN_MAP" "$CB_MAP"; do
-  [[ -s "$f" ]] && cat "$f"
+  if [[ -s "$f" ]]; then cat "$f"; fi
 done \
 | awk -F'\t' 'BEGIN{OFS="\t"} NF==3{k=$1 FS $2 FS $3; if(!(k in seen)){seen[k]=1; print}}' \
 > "$RAW_NORM"

@@ -46,7 +46,7 @@ if [[ ! -s "$RAW" ]]; then
 
   # MOB-recon
   for f in "$BASE"/mobrecon/*reconstructed*.fasta "$BASE"/mobrecon/*plasmid*.fasta; do
-    [[ -s "$f" ]] && awk -v p="mobrecon" '/^>/{sub(/^>/,">"p"|")}1' "$f" >> "$tmp"
+    if [[ -s "$f" ]]; then awk -v p="mobrecon" '/^>/{sub(/^>/,">"p"|")}1' "$f" >> "$tmp"; fi
   done
 
   # length filter
