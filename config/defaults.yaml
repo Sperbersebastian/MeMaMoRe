@@ -21,6 +21,9 @@ modules:
     qc:
       breadth_min: 0.8
       depth_min: 2.0
+  binning:
+    # GUNC chimerism check after MAGScoT; gunc_pass feeds the MAG quality tier
+    gunc: true
   plasmids:
     # union: every candidate of any predictor (default, previous behaviour)
     # min2 / min3: candidates confirmed by >= 2 / 3 predictors, i.e. covered over

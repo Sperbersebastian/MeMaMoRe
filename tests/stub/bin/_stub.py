@@ -748,6 +748,26 @@ def show_coords():
                 sys.stdout.write(f"1\t{la}\t1\t{lb}\t{la}\t{lb}\t100.00\t{la}\t{lb}\t100.00\t100.00\t{a}\t{b}\n")
 
 
+
+def gunc():
+    sub = ARGS[0] if ARGS else ""
+    if sub == "download_db":
+        write(Path(positional()[1]) / "gunc_db_progenomes2.1.dmnd", "stub\n")
+        return
+    if sub != "run":
+        log(f"unhandled gunc {sub}; no-op")
+        return
+    out, suffix = mkdir(opt("-o", "--out_dir")), opt("-e", "--file_suffix", default=".fa")
+    rows = ["genome\tn_genes_called\tn_genes_mapped\tn_contigs\ttaxonomic_level\t"
+            "proportion_genes_retained_in_major_clades\tgenes_retained_index\tclade_separation_score\t"
+            "contamination_portion\tn_effective_surplus_clades\tmean_hit_identity\t"
+            "reference_representation_score\tpass.GUNC"]
+    for f in sorted(Path(opt("-d", "--input_dir")).glob("*" + suffix)):
+        n = len(read_fasta_ids(f))
+        rows.append(f"{f.name[:-len(suffix)]}\t{n}\t{n}\t2\tkingdom\t1.0\t1.0\t0.0\t0.0\t0.0\t0.95\t0.9\tTrue")
+    write(out / "GUNC.progenomes_2.1.maxCSS_level.tsv", "\n".join(rows) + "\n")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -761,7 +781,7 @@ HANDLERS = {
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
-    "nucmer": nucmer, "show-coords": show_coords,
+    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc,
 }
 
 if __name__ == "__main__":

@@ -42,6 +42,7 @@ mkdir -p "$WORK/refdata/gtdbtk/release226/markers" "$WORK/refdata/mobsuite_db" "
 fake refdata/viralverify/pfam/Pfam-A.hmm
 fake refdata/genomad/genomad_db/version.txt
 mkdir -p "$WORK/refdata/iphop/Aug_2023_pub_rw"
+fake refdata/gunc/gunc_db_progenomes2.1.dmnd
 fake refdata/virsorter2/db/Done_all_setup
 for h in Pfam-A_v32 KEGG_profiles_prokaryotes VOGDB94_phage; do for x in h3f h3i h3m h3p; do fake "refdata/vibrant/db/databases/$h.HMM.$x"; done; done
 fake refdata/vibrant/db/files/VIBRANT_names.tsv

@@ -114,6 +114,10 @@ run_binning(){
     ROOT="$ROOT" SAMPLE="$SID" MAGS_ROOT="$ROOT/external/MAGScoT" \
       bash "$ROOT/modules/binning/magscot/exec.sh"
 
+    # ---- GUNC (chimerism) on the refined bins; never fails the module ----
+    ROOT="$ROOT" SAMPLE="$SID" PARAMS_YAML="$PARAMS_YAML" CPUS="$CPUS" FORCE="${FORCE:-0}" \
+      bash "$ROOT/modules/binning/gunc/exec.sh" || echo "[gunc] $SID failed (see logs); continuing"
+
     # ---- QC ----
     ROOT="$ROOT" SAMPLE="$SID" bash "$ROOT/modules/binning/qc_checkm2/exec.sh"
     ROOT="$ROOT" SAMPLE="$SID" bash "$ROOT/modules/binning/qc_rrna_trna/exec.sh"

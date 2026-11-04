@@ -6,7 +6,7 @@ Usage: scripts/summarize_samples.py ROOT [--samples s1,s2,...] [--out DIR]
 
 Writes (tab-separated):
   samples_overview.tsv   one row per sample: reads, assembly, MAGs, plasmids, viruses, ARGs, virulence
-  mags.tsv               every refined MAG with CheckM2 quality tier and GTDB-Tk taxonomy
+  mags.tsv               every refined MAG: CheckM2, GUNC pass, quality tier, GTDB-Tk taxonomy
   viruses.tsv            every virus contig with CheckV quality (and iPHoP host genus if run)
   args_matrix.tsv        tool|gene x sample (hits over all contexts; RGI Loose and AMR++ <80% gene fraction excluded upstream)
   virulence_matrix.tsv   virulence gene x sample (VFDB via ABRicate)
@@ -58,8 +58,11 @@ def count_fasta(path):
     return len(fasta_lengths(path)) if path and os.path.isfile(path) else ""
 
 
-def mag_tier(comp, cont):
-    # MIMAG-style tiers from CheckM2 (completeness/contamination in %)
+def mag_tier(comp, cont, gunc_pass=""):
+    # MIMAG-style tiers from CheckM2 (completeness/contamination in %); a MAG
+    # that GUNC flags as chimeric is "low" whatever its CheckM2 values
+    if gunc_pass == "False":
+        return "low"
     if comp >= 90 and cont < 5:
         return "high"
     if comp >= 50 and cont < 10:
@@ -131,6 +134,10 @@ def main():
         for f in ("gtdbtk.bac120.summary.tsv", "gtdbtk.ar53.summary.tsv"):
             for r in read_tsv(os.path.join(sra, "binning", "gtdbtk", s, f)):
                 tax[r["user_genome"]] = r.get("classification", "")
+        gunc = {}
+        for gf in glob.glob(os.path.join(sra, "binning", "gunc", s, "GUNC.*.maxCSS_level.tsv")):
+            for r in read_tsv(gf):
+                gunc[r.get("genome", "")] = r.get("pass.GUNC", "")
         bins = sorted(glob.glob(os.path.join(sra, "binning", "magscot", s, "bins", "*.fa")))
         tiers = defaultdict(int)
         for b in bins:
@@ -139,12 +146,13 @@ def main():
             r = q.get(name, {})
             try:
                 comp, cont = float(r["Completeness"]), float(r["Contamination"])
-                tier = mag_tier(comp, cont)
+                tier = mag_tier(comp, cont, gunc.get(name, ""))
             except (KeyError, ValueError):
                 comp = cont = ""
                 tier = "unknown"
             tiers[tier] += 1
-            mags.append([s, name, len(blens), sum(blens), n50(blens), comp, cont, tier, tax.get(name, "")])
+            mags.append([s, name, len(blens), sum(blens), n50(blens), comp, cont, gunc.get(name, ""), tier,
+                         tax.get(name, "")])
         if bins:
             row["mags"] = len(bins)
             row["mags_high"] = tiers["high"]
@@ -210,7 +218,8 @@ def main():
             "arg_genes_mag", "arg_genes_virus", "virulence_genes"]
     write_tsv(os.path.join(out, "samples_overview.tsv"), cols, [[r.get(c, "") for c in cols] for r in overview])
     write_tsv(os.path.join(out, "mags.tsv"),
-              ["sample", "bin", "contigs", "size_bp", "n50", "completeness", "contamination", "quality", "gtdb_classification"],
+              ["sample", "bin", "contigs", "size_bp", "n50", "completeness", "contamination", "gunc_pass", "quality",
+               "gtdb_classification"],
               mags)
     write_tsv(os.path.join(out, "viruses.tsv"),
               ["sample", "contig", "length", "checkv_quality", "completeness", "provirus", "iphop_host_genus"],
