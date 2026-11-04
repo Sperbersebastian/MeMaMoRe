@@ -37,7 +37,7 @@ done
 
 # --- RGI (all contexts) ---
 RGI_DIR="$ROOT/SRA/args/$SAMPLE/rgi"
-for ctx_dir in "$RGI_DIR"/contigs "$RGI_DIR"/mags "$RGI_DIR"/plasmids "$RGI_DIR"/viruses; do
+for ctx_dir in "$RGI_DIR"/genes "$RGI_DIR"/contigs "$RGI_DIR"/mags "$RGI_DIR"/plasmids "$RGI_DIR"/viruses; do
   [[ -d "$ctx_dir" ]] || continue
   context=$(basename "$ctx_dir")
   for f in "$ctx_dir"/*.txt; do

@@ -115,11 +115,13 @@ if [[ ! -s "$SCRIPT" || ! -s "$HMM_TIGR" || ! -s "$HMM_PFAM" ]]; then
 fi
 
 TMP="$OUT/tmp"; mkdir -p "$TMP"
-FAA="$OUT/prodigal.faa"
+# central gene calls (modules/assembly/genes); own Prodigal run only as fallback
+FAA="$ROOT/SRA/assemblies/genes/$SAMPLE/genes.faa"
+[[ -s "$FAA" ]] || FAA="$OUT/prodigal.faa"
 
 [[ -s "$FAA" ]] || micromamba run -n env_binning prodigal -i "$CONTIGS" -p meta -a "$FAA" -d "$TMP/prodigal.ffn" -o "$TMP/prodigal.log"
-[[ -s "$TMP/tigr.tbl" ]] || micromamba run -n env_binning hmmsearch -o "$TMP/tigr.out" --tblout "$TMP/tigr.tbl" --noali --notextw --cut_nc --cpu "$CPUS" "$HMM_TIGR" "$FAA"
-[[ -s "$TMP/pfam.tbl" ]] || micromamba run -n env_binning hmmsearch -o "$TMP/pfam.out" --tblout "$TMP/pfam.tbl" --noali --notextw --cut_nc --cpu "$CPUS" "$HMM_PFAM" "$FAA"
+[[ -s "$TMP/tigr.tbl" && "$TMP/tigr.tbl" -nt "$FAA" ]] || micromamba run -n env_binning hmmsearch -o "$TMP/tigr.out" --tblout "$TMP/tigr.tbl" --noali --notextw --cut_nc --cpu "$CPUS" "$HMM_TIGR" "$FAA"
+[[ -s "$TMP/pfam.tbl" && "$TMP/pfam.tbl" -nt "$FAA" ]] || micromamba run -n env_binning hmmsearch -o "$TMP/pfam.out" --tblout "$TMP/pfam.tbl" --noali --notextw --cut_nc --cpu "$CPUS" "$HMM_PFAM" "$FAA"
 
 # MAGScoT --hmm: gene id, marker accession, e-value (tblout: $1 target, $4 query acc, $5 e-value).
 # Older runs wrote "marker, gene, 0", which made MAGScoT score no bin at all: rebuild those.
@@ -128,6 +130,7 @@ if [[ -s "$HMM_MAP" ]] && awk -F'\t' 'NR==1{exit !($1 ~ /^(PF|TIGR)[0-9]/)}' "$H
   echo "[magscot] rebuilding $HMM_MAP (old column order) and discarding MAGScoT results built from it"
   rm -f "$HMM_MAP" "$OUT"/MAGScoT.*
 fi
+[[ -s "$HMM_MAP" && "$HMM_MAP" -nt "$TMP/tigr.tbl" ]] || rm -f "$HMM_MAP" "$OUT"/MAGScoT.*
 if [[ ! -s "$HMM_MAP" ]]; then
   awk 'BEGIN{OFS="\t"} $1!~/^#/{print $1,$4,$5}' "$TMP/tigr.tbl" > "$TMP/tigr.map"
   awk 'BEGIN{OFS="\t"} $1!~/^#/{print $1,$4,$5}' "$TMP/pfam.tbl" > "$TMP/pfam.map"
