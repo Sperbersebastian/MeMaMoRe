@@ -431,7 +431,7 @@ def api_logs_stream(sample):
 SUMMARY_FILES = {
     "overview": "samples_overview.tsv", "mags": "mags.tsv", "viruses": "viruses.tsv",
     "args_matrix": "args_matrix.tsv", "virulence_matrix": "virulence_matrix.tsv",
-    "replicons_matrix": "replicons_matrix.tsv",
+    "replicons_matrix": "replicons_matrix.tsv", "mag_catalog": "mag_catalog.tsv",
 }
 
 @app.route("/api/summary")

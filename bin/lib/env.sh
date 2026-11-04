@@ -84,6 +84,7 @@ _env_name(){
     union_virus)            echo "plasmids_core" ;;
     checkv)                 echo "checkv_env" ;;
     iphop)                  echo "iphop_env" ;;
+    catalog)                echo "drep_env" ;;
     # --- ARG-Submodule ---
     args)                   echo "env_args" ;;
     deeparg)                echo "deeparg_env" ;;
@@ -120,6 +121,7 @@ _resolve_creator(){
       ;;
     amrfinderplus) echo "$ROOT/envs/create_env_amrfinder.sh"; return 0 ;;
     mge|mobileog)  echo "$ROOT/envs/create_env_mge.sh"; return 0 ;;
+    catalog)       echo "$ROOT/envs/create_env_drep.sh"; return 0 ;;
     # ARG substeps: summary_args reuses deeparg env
     summary_args)
       [[ -s "$ROOT/envs/create_env_deeparg.sh" ]] && { echo "$ROOT/envs/create_env_deeparg.sh"; return 0; }
@@ -179,7 +181,7 @@ list_env_specs(){
   for m in ingest qc assembly binning sra_tools sim mapping_coverm coverm plasmids \
            viralverify plasme genomad mobrecon plasmer typer cluster union_cluster typing_hotspot \
            viruses virsorter2 vibrant checkv iphop \
-           args deeparg rgi amrplusplus abricate amrfinderplus mge mobileog summary_args; do
+           args deeparg rgi amrplusplus abricate amrfinderplus mge mobileog summary_args catalog; do
     local env create
     env="$(_env_name "$m")"
     if create="$(_resolve_creator "$m")"; then :; else

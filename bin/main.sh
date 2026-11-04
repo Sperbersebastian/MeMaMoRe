@@ -40,6 +40,8 @@ Direct helpers:
 
 Modules:
   ingest, qc, assembly, binning, sim, plasmids, viruses, args, all
+  catalog   project MAG catalog over all samples (dRep v4/skani + CoverM) -> SRA/summary/mag_catalog.tsv
+            (bin/main.sh run catalog [--samples=s1,s2])
 USAGE
 }
 
@@ -103,6 +105,13 @@ run_args_wrap(){
   export PARAMS_YAML="$p" ROOT MODE RESUME FORCE FROM ONLY SAMPLE
   bash "$ROOT/bin/modules/args.sh"
 }
+
+run_catalog_wrap(){ ensure_env_by_module "catalog"; local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
+  : > "$m"; merge "$p" "$m"
+  local a CAT_SAMPLES=""
+  for a in "${ARGS[@]:-}"; do case "$a" in --samples=*) CAT_SAMPLES="${a#--samples=}" ;; esac; done
+  export PARAMS_YAML="$p" ROOT CATALOG_SAMPLES="$CAT_SAMPLES"
+  run_in_env "drep_env" bash "$ROOT/bin/modules/catalog.sh"; }
 
 # ---- new: run all ----
 run_all_wrap(){
@@ -209,6 +218,7 @@ case "$cmd" in
       plasmids) run_plasmids_wrap ;;
       viruses)  run_viruses_wrap  ;;
       args)     run_args_wrap     ;;
+      catalog)  run_catalog_wrap  ;;   # project-wide MAG catalog (dRep + CoverM)
       all)      : "${SAMPLE:?need --sample for plasmids/viruses in all}"; run_all_wrap ;;
       *) usage; exit 2 ;;
     esac

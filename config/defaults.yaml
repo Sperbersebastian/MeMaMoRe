@@ -34,6 +34,11 @@ modules:
     semibin2_environment: ""    # "" = self-supervised; or a pre-trained habitat (e.g. human_gut)
     # GUNC chimerism check after MAGScoT; gunc_pass feeds the MAG quality tier
     gunc: true
+  catalog:
+    # project MAG catalog (bin/main.sh run catalog): dRep v4 with skani
+    ani: 0.95                   # secondary clustering ANI (species level)
+    min_completeness: 50        # CheckM2, passed to dRep via --genomeInfo
+    max_contamination: 10
   plasmids:
     # union: every candidate of any predictor (default, previous behaviour)
     # min2 / min3: candidates confirmed by >= 2 / 3 predictors, i.e. covered over

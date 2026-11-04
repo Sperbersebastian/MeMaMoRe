@@ -228,7 +228,49 @@ def samtools():
         log(f"unhandled samtools {sub}; no-op")
 
 
+def coverm_genome():
+    """coverm genome ... --genome-fasta-directory D -x fa -> Genome + one column per method."""
+    gdir, ext = Path(opt("--genome-fasta-directory")), opt("-x", "--genome-fasta-extension", default="fa")
+    reads = os.path.basename(opt("-1", "--single", default="reads"))
+    genomes = sorted(f.name[:-len(ext) - 1] for f in gdir.glob(f"*.{ext}"))
+    rows = [f"Genome\t{reads} Relative Abundance (%)\t{reads} Mean\t{reads} Covered Fraction", "unmapped\t10.0\tNA\tNA"]
+    rows += [f"{g}\t{90.0 / max(len(genomes), 1):.2f}\t12.5\t0.98" for g in genomes]
+    write(opt("-o", "--output-file"), "\n".join(rows) + "\n")
+
+
+def drep():
+    """dRep dereplicate OUT -g G... --genomeInfo INFO: one cluster per bin name (bins of the same
+    toy organism in different samples share the name, like real conspecific MAGs)."""
+    if ARGS[:1] != ["dereplicate"]:
+        return
+    out = Path(ARGS[1])
+    gi = ARGS.index("-g")
+    genomes = []
+    for a in ARGS[gi + 1:]:
+        if a.startswith("-"):
+            break
+        genomes.append(a)
+    clusters = {}
+    for g in genomes:
+        key = os.path.basename(g).split("__", 1)[-1]
+        clusters.setdefault(key, []).append(g)
+    reps = mkdir(out / "dereplicated_genomes")
+    cdb = ["genome,secondary_cluster,threshold,cluster_method,comparison_algorithm,primary_cluster"]
+    wdb = ["genome,cluster,score"]
+    for i, (key, gs) in enumerate(sorted(clusters.items()), 1):
+        for g in gs:
+            cdb.append(f"{os.path.basename(g)},{i}_1,0.05,average,skani,{i}")
+        win = sorted(gs)[0]
+        wdb.append(f"{os.path.basename(win)},{i}_1,95.0")
+        with open(win) as fi, open(reps / os.path.basename(win), "w") as fo:
+            fo.write(fi.read())
+    write(out / "data_tables" / "Cdb.csv", "\n".join(cdb) + "\n")
+    write(out / "data_tables" / "Wdb.csv", "\n".join(wdb) + "\n")
+
+
 def coverm():
+    if ARGS[:1] == ["genome"]:
+        return coverm_genome()
     ref = opt("--reference", "-r")
     methods = []
     if "--methods" in ARGS or "-m" in ARGS:
@@ -895,7 +937,7 @@ HANDLERS = {
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
     "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2, "amrfinder": amrfinder, "argnorm": argnorm,
-    "integron_finder": integron_finder, "isescan.py": isescan, "diamond": diamond,
+    "integron_finder": integron_finder, "isescan.py": isescan, "diamond": diamond, "dRep": drep,
 }
 
 if __name__ == "__main__":

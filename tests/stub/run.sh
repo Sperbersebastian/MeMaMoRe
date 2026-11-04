@@ -93,6 +93,8 @@ for m in "${MODULES[@]}"; do
     *)       for s in "${SAMPLES[@]}"; do "$WORK/bin/main.sh" run "$m" --sample "$s" "${SETS[@]}"; done ;;
   esac
 done
+echo "[stub] ===== catalog ====="
+if [[ " ${MODULES[*]} " == *" binning "* ]]; then "$WORK/bin/main.sh" run catalog "${SETS[@]}"; fi
 echo "[stub] ===== summary ====="
 "$WORK/bin/main.sh" summary
 echo "[stub] all modules finished: ${MODULES[*]}"
