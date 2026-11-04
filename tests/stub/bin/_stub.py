@@ -706,6 +706,26 @@ def iphop():
     write(out / "Host_prediction_to_genome_m90.csv", rows[0] + "\n")
 
 
+
+# ---------------------------------------------------------------- central gene calls
+def pyrodigal():
+    """pyrodigal -p meta -i IN -a FAA -d FFN -f gff -o GFF: two genes per contig, IDs <contig>_<n>."""
+    faa, ffn, gff = [], [], ["##gff-version  3"]
+    for cid, sq in records(opt("-i")):
+        for n in (1, 2):
+            start = 1 + (n - 1) * 600
+            end = min(len(sq), start + 299)
+            nt = sq[start - 1:end]
+            gid = f"{cid}_{n}"
+            hdr = f"{gid} # {start} # {end} # 1 # ID={n};partial=00;start_type=ATG"
+            faa.append((hdr, "M" + "A" * (len(nt) // 3 - 1)))
+            ffn.append((hdr, nt))
+            gff.append(f"{cid}\tpyrodigal_v3.7.1\tCDS\t{start}\t{end}\t50.0\t+\t0\tID={cid}_{n};partial=00")
+    write_fasta(opt("-a"), faa)
+    write_fasta(opt("-d"), ffn)
+    write(opt("-o"), "\n".join(gff) + "\n")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -718,7 +738,7 @@ HANDLERS = {
     "metaplasmidspades.py": metaplasmidspades, "metaviralspades.py": metaviralspades,
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
-    "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop,
+    "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
 }
 
 if __name__ == "__main__":

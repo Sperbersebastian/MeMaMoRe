@@ -9,9 +9,9 @@ CH="-c conda-forge -c bioconda --channel-priority flexible"
 
 # env_assembly_core → SPAdes (and python)
 if micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx env_assembly_core; then
-  micromamba install -y -n env_assembly_core $CH python=3.10 spades
+  micromamba install -y -n env_assembly_core $CH python=3.10 spades pyrodigal
 else
-  micromamba create  -y -n env_assembly_core $CH python=3.10 spades
+  micromamba create  -y -n env_assembly_core $CH python=3.10 spades pyrodigal
 fi
 
 # env_mapping_coverm → mapping + coverage tools
