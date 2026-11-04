@@ -37,10 +37,22 @@ run_binning(){
   GMINLEN="$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" \
            --defaults "$PARAMS_YAML" --get global.contig_min_len 2>/dev/null || echo 1000)"
 
-  # ---- iterate manifest (sample \t fq1 \t fq2?) ----
-  tail -n +2 "$MANIFEST" | tr -d '\r' | while IFS=$'\t' read -r SID FQ1 FQ2 || [[ -n "${SID:-}" ]]; do
+  # ---- binning groups (manifest column 'group', overridable in config/samples.tsv) ----
+  # shellcheck source=bin/lib/cfg.sh
+  source "$ROOT/bin/lib/cfg.sh"
+  local MAX_GROUP; MAX_GROUP="$(cfg modules.binning.max_group 20)"
+  local -a TODO=()
+  if [[ -n "${SAMPLE:-}" ]]; then
+    # a sample of a group (>= 2) re-bins the whole group: coverage changes for all members
+    mapfile -t TODO < <(python3 "$ROOT/scripts/sample_groups.py" "$ROOT" "$SAMPLE")
+    [[ ${#TODO[@]} -gt 1 ]] && echo "[binning] $SAMPLE is in a group of ${#TODO[@]}: binning all members (${TODO[*]})"
+  else
+    mapfile -t TODO < <(tail -n +2 "$MANIFEST" | tr -d '\r' | cut -f1 | sed '/^$/d')
+  fi
+
+  local SID
+  for SID in "${TODO[@]}"; do
     [[ -z "${SID:-}" ]] && continue
-    [[ -n "${SAMPLE:-}" && "$SID" != "$SAMPLE" ]] && continue
 
     # assembly & qc paths
     local ASM_DIR="$ROOT/SRA/assemblies/spades/$SID"
@@ -62,8 +74,32 @@ run_binning(){
 
     export GTDBTK_DATA_PATH CPUS
 
+    # ---- multi-sample coverage within the binning group ----
+    local -a GM=(); local GROUP_BAMS="" GROUP_DIR="" GNAME=""
+    mapfile -t GM < <(python3 "$ROOT/scripts/sample_groups.py" "$ROOT" "$SID")
+    GNAME="$(python3 "$ROOT/scripts/sample_groups.py" "$ROOT" | awk -F'\t' -v s="$SID" '$1==s{print $2}')"
+    if [[ ${#GM[@]} -ge 2 ]]; then
+      if [[ ${#GM[@]} -gt "$MAX_GROUP" ]]; then
+        echo "[binning] WARNING: group '$GNAME' has ${#GM[@]} samples > modules.binning.max_group=$MAX_GROUP:" \
+             "$(( ${#GM[@]} * ${#GM[@]} )) read mappings in total (${#GM[@]} per assembly); not split automatically"
+      fi
+      echo "[binning] group '$GNAME': coverage of ${#GM[@]} samples (${GM[*]}) on the $SID assembly"
+      ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" MEMBERS="${GM[*]}" CPUS="$CPUS" \
+        bash "$ROOT/modules/binning/map_group/exec.sh"
+      GROUP_DIR="$ROOT/SRA/binning/coverage/$SID/group"
+      GROUP_BAMS="$(tr '\n' ' ' < "$GROUP_DIR/bams.txt")"
+    elif [[ -n "$GNAME" ]]; then
+      echo "[binning] group '$GNAME' has only $SID: per-sample binning"
+    fi
+    # group membership changed since the last binning -> rerun the cached binners
+    local GSTAMP="$ROOT/SRA/binning/coverage/$SID/.binning_members"
+    local GFORCE="${FORCE:-0}"
+    if [[ -f "$GSTAMP" && "$(cat "$GSTAMP")" != "${GM[*]}" ]]; then
+      echo "[binning] $SID: group members changed ($(cat "$GSTAMP") -> ${GM[*]}): re-binning"; GFORCE=1
+    fi
+
     # ---- coverage table ----
-    ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" CONTIGS="$CONTIGS" BAM="$BAM" \
+    ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" CONTIGS="$CONTIGS" BAM="$BAM" BAMS="$GROUP_BAMS" \
       bash "$ROOT/modules/binning/coverage/exec.sh"
 
     # ---- MetaBAT2 ----
@@ -92,11 +128,11 @@ run_binning(){
     # ---- COMEBin (best effort) ----
     local GFA="$ASM_DIR/assembly_graph_with_scaffolds.gfa"
     [[ -s "$GFA" ]] || echo "[comebin] $SID missing $GFA (will try without graph)"
-    ROOT="$ROOT" SAMPLE="$SID" BAM="$BAM" \
+    ROOT="$ROOT" SAMPLE="$SID" BAM="$BAM" BAM_DIR="${GROUP_DIR:-}" FORCE="$GFORCE" \
       bash "$ROOT/modules/binning/comebin/exec.sh" || echo "[comebin] $SID skipped or failed"
 
     # ---- SemiBin2 (best effort, like COMEBin) ----
-    ROOT="$ROOT" SAMPLE="$SID" PARAMS_YAML="$PARAMS_YAML" CPUS="$CPUS" FORCE="${FORCE:-0}" \
+    ROOT="$ROOT" SAMPLE="$SID" PARAMS_YAML="$PARAMS_YAML" CPUS="$CPUS" FORCE="$GFORCE" BAMS="$GROUP_BAMS" \
       bash "$ROOT/modules/binning/semibin2/exec.sh" || echo "[semibin2] $SID skipped or failed"
 
     # ---- merge candidate bin sets for MAGScoT ----
@@ -131,5 +167,8 @@ run_binning(){
 
     # ---- Taxonomy ----
     ROOT="$ROOT" SAMPLE="$SID" bash "$ROOT/modules/binning/gtdbtk/exec.sh"
+
+    # binning done for this group composition
+    echo "${GM[*]}" > "$GSTAMP"
   done
 }

@@ -188,13 +188,23 @@ echo "$IN_SUM" > "$OUT/.magscot_input.md5"
 
 # ---------- refined bins -> bins/<bin>.fa (input for CheckM2, barrnap/tRNAscan, GTDB-Tk) ----------
 # MAGScoT prefixes refined bin names with the -o value, i.e. the full output path: keep the basename
+# Exported only when the refined set changed (keeps timestamps, so GUNC, CheckM2
+# and GTDB-Tk are not re-run for identical bins); bins/.md5 identifies the set.
 BINS_DIR="$OUT/bins"
-rm -rf "$BINS_DIR"; mkdir -p "$BINS_DIR"
-awk -v dir="$BINS_DIR" '
+NEW_BINS="$OUT/bins.new"
+rm -rf "$NEW_BINS"; mkdir -p "$NEW_BINS"
+awk -v dir="$NEW_BINS" '
   FNR==NR { if (FNR>1 && NF>=2) { b=$1; sub(/.*\//, "", b); bin[$2]=b }; next }
   /^>/    { id=substr($1,2); out=(id in bin) ? dir "/" bin[id] ".fa" : ""; if (out!="") print > out; next }
   out!="" { print > out }
 ' "$REFINED" "$CONTIGS"
+_bins_md5(){ (cd "$1" && find . -maxdepth 1 -name '*.fa' -print0 | sort -z | xargs -0 -r cat | md5sum | cut -d' ' -f1); }
+NEW_SUM="$(_bins_md5 "$NEW_BINS")"
+if [[ -d "$BINS_DIR" && "$(cat "$BINS_DIR/.md5" 2>/dev/null)" == "$NEW_SUM" ]]; then
+  rm -rf "$NEW_BINS"; echo "[magscot] refined bins unchanged"
+else
+  rm -rf "$BINS_DIR"; mv "$NEW_BINS" "$BINS_DIR"; echo "$NEW_SUM" > "$BINS_DIR/.md5"
+fi
 # refined contig->bin table for the GUI
 awk 'BEGIN{OFS="\t"; print "contig","bin"} NR>1 && NF>=2 {b=$1; sub(/.*\//, "", b); print $2,b}' "$REFINED" > "$OUT/contigs_to_bin.tsv"
 echo "[magscot] $(find "$BINS_DIR" -name '*.fa' | wc -l) refined bins -> $BINS_DIR"

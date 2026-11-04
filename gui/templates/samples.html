@@ -23,6 +23,10 @@
       <label>SRA Accession</label>
       <input type="text" id="new-sample-sra" placeholder="e.g. SRR12345678">
     </div>
+    <div class="form-group">
+      <label>Binning group (optional)</label>
+      <input type="text" id="new-sample-group" placeholder="e.g. site1">
+    </div>
     <div class="form-group" id="fasta-field">
       <label>Select FASTA File</label>
       <input type="file" id="new-sample-fasta" accept=".fasta,.fa,.fna">
@@ -38,7 +42,7 @@
   </div>
   <div class="panel-body">
     <table id="samples-table">
-      <thead><tr><th>Sample</th><th>ingest</th><th>qc</th><th>assembly</th><th>binning</th><th>plasmids</th><th>viruses</th><th>args</th><th>Disk</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Sample</th><th>Group</th><th>ingest</th><th>qc</th><th>assembly</th><th>binning</th><th>plasmids</th><th>viruses</th><th>args</th><th>Disk</th><th>Actions</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -62,6 +66,7 @@ async function loadSamples() {
   tbody.innerHTML = samples.map(s => `
     <tr>
       <td><strong>${s.name}</strong></td>
+      <td>${(s.group || '').replace(/[^A-Za-z0-9._-]/g, '')}</td>
       ${MODS.map(m => `<td>${sIcon(s.status[m] || 'pending')}</td>`).join('')}
       <td class="disk-badge" id="disk-${s.name}">…</td>
       <td>
@@ -122,6 +127,8 @@ async function addSample() {
     resp = await fetch('/api/samples/add', { method: 'POST', body: fd });
   } else {
     const body = { name, type };
+    const group = (document.getElementById('new-sample-group')?.value || '').trim();
+    if (group) body.group = group;
     if (type === 'sra') {
       if (!sra) { showToast('Enter an SRA accession', 'error'); return; }
       body.value = sra;

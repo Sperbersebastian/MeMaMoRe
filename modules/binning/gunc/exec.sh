@@ -25,8 +25,10 @@ shopt -s nullglob; bins=( "$BINS"/*.fa ); shopt -u nullglob
 [[ ${#bins[@]} -gt 0 ]] || { echo "[gunc] no refined bins for $SAMPLE -> skip"; exit 0; }
 [[ -s "$GENES" && -s "$MAP" ]] || { echo "[gunc] missing $GENES or $MAP -> skip"; exit 0; }
 
+# refined bins identity (magscot/<s>/bins/.md5): results are reused only for the same bins
+BINS_SUM="$(cat "$ROOT/SRA/binning/magscot/$SAMPLE/bins/.md5" 2>/dev/null || echo none)"
 RES="$(find "$OUT" -maxdepth 1 -name 'GUNC.*.maxCSS_level.tsv' -print -quit 2>/dev/null || true)"
-if [[ -n "$RES" && "$FORCE" != "1" && "$RES" -nt "$MAP" ]]; then
+if [[ -n "$RES" && "$FORCE" != "1" && "$(cat "$OUT/.bins.md5" 2>/dev/null)" == "$BINS_SUM" ]]; then
   echo "[gunc] cached -> $RES"; exit 0
 fi
 
@@ -54,4 +56,5 @@ echo "[gunc] ${#bins[@]} bins, db=$(basename "$DB")"
 micromamba run -n gunc_env gunc run -d "$FAA_DIR" -e .faa -g -r "$DB" -t "$CPUS" -o "$OUT" >>"$LOG" 2>&1
 RES="$(find "$OUT" -maxdepth 1 -name 'GUNC.*.maxCSS_level.tsv' -print -quit)"
 [[ -s "$RES" ]] || { echo "[gunc] ERROR: no GUNC result in $OUT (see $LOG)"; exit 3; }
+echo "$BINS_SUM" > "$OUT/.bins.md5"
 echo "[gunc] $(awk -F'\t' 'NR>1 && $NF=="True"' "$RES" | wc -l)/$(( $(wc -l < "$RES") - 1 )) bins pass -> $RES"

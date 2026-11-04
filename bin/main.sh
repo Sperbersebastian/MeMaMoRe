@@ -175,8 +175,8 @@ case "$cmd" in
         --sample) require_val "$1" "${2:-}"; SAMPLE="$2"; shift ;;
         --set)    require_val "$1" "${2:-}"; SETS+=("$2"); shift ;;
         --set=*)  SETS+=("${1#--set=}") ;;
-        --fastq|--srr|--fasta) require_val "$1" "${2:-}"; ARGS+=("$1" "$2"); shift ;;
-        --fastq=*|--srr=*|--fasta=*) ARGS+=("$1") ;;
+        --fastq|--srr|--fasta|--group) require_val "$1" "${2:-}"; ARGS+=("$1" "$2"); shift ;;
+        --fastq=*|--srr=*|--fasta=*|--group=*) ARGS+=("$1") ;;
         --force-env|--force-env=all) FORCE_ENV_MODE="all" ;;
         --force-env=*) FORCE_ENV_MODE="one"; FORCE_ENV_TARGET="${1#*=}" ;;
         *) ARGS+=("$1") ;;

@@ -28,7 +28,10 @@ read -r -a BAM_LIST <<<"${BAMS:-$ROOT/SRA/assemblies/spades/$SAMPLE/map/${SAMPLE
 for b in "${BAM_LIST[@]}"; do [[ -s "$b" ]] || { echo "[semibin2] missing BAM $b"; exit 2; }; done
 
 MAP="$OUT/contigs_to_bin.with_set.tsv"
-if [[ -s "$MAP" && "$FORCE" != "1" && "$MAP" -nt "${BAM_LIST[0]}" ]]; then
+_fresh=1
+for b in "${BAM_LIST[@]}"; do [[ "$MAP" -nt "$b" ]] || _fresh=0; done
+[[ "$(cat "$OUT/.bams" 2>/dev/null)" == "${BAM_LIST[*]}" ]] || _fresh=0
+if [[ -s "$MAP" && "$FORCE" != "1" && "$_fresh" == 1 ]]; then
   echo "[semibin2] cached -> $MAP"; exit 0
 fi
 
@@ -50,4 +53,5 @@ for fa in "$OUT"/output_bins/*.fa; do
 done
 shopt -u nullglob
 mv -f "$MAP.tmp" "$MAP"
+echo "${BAM_LIST[*]}" > "$OUT/.bams"
 echo "[semibin2] $(cut -f2 "$MAP" | sort -u | wc -l) bins -> $OUT/output_bins"

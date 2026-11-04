@@ -27,6 +27,9 @@ modules:
       depth_min: 2.0
   binning:
     min_contig_len: 1500        # MetaBAT2 (hard floor 1500) and Binny
+    # multi-sample binning: samples sharing a 'group' (ingest manifest or config/samples.tsv)
+    # get every member's reads mapped onto each assembly (n x n mappings); bins stay per sample
+    max_group: 20               # larger groups only trigger a warning (no automatic split)
     semibin2: true              # SemiBin2 as 4th binner (best effort, into MAGScoT)
     semibin2_environment: ""    # "" = self-supervised; or a pre-trained habitat (e.g. human_gut)
     # GUNC chimerism check after MAGScoT; gunc_pass feeds the MAG quality tier

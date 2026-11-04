@@ -15,7 +15,7 @@ run_assembly(){
   [[ -s "$MANI" ]] || { echo "Missing $MANI. Run ingest first."; exit 2; }
 
   # sample \t fq1 \t fq2
-  tail -n +2 "$MANI" | tr -d '\r' | while IFS=$'\t' read -r SID R1 R2; do
+  tail -n +2 "$MANI" | tr -d '\r' | while IFS=$'\t' read -r SID R1 R2 _GROUP; do
     [[ -n "${SAMPLE:-}" && "$SID" != "$SAMPLE" ]] && continue
 
     # choose inputs (prefer testsets in --test if present)

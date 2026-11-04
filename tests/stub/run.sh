@@ -62,27 +62,35 @@ printf 'header,class,mechanism,group\nMEG_1|Drugs|betalactams|Class_A_betalactam
 mkdir -p "$WORK/external"
 cp -rn "$STUB/external/." "$WORK/external/"
 
-# --- tiny paired-end reads ---------------------------------------------------
+# --- tiny paired-end reads for two samples in one binning group ---------------
+# (all samples of a test run share a group, so multi-sample binning is always tested)
+SAMPLES=("$SAMPLE" "${SAMPLE}2")
 mkdir -p "$WORK/input"
-"$STUB_PYTHON" - "$WORK/input" "$SAMPLE" <<'PY'
+"$STUB_PYTHON" - "$WORK/input" "${SAMPLES[@]}" <<'PY'
 import gzip, random, sys
-out, s = sys.argv[1], sys.argv[2]
-rnd = random.Random(1)
-for mate in (1, 2):
-    with gzip.open(f"{out}/{s}_{mate}.fastq.gz", "wt") as f:
-        for i in range(200):
-            seq = "".join(rnd.choice("ACGT") for _ in range(150))
-            f.write(f"@r{i}/{mate}\n{seq}\n+\n{'I' * 150}\n")
+out = sys.argv[1]
+for k, s in enumerate(sys.argv[2:]):
+    rnd = random.Random(1 + k)
+    for mate in (1, 2):
+        with gzip.open(f"{out}/{s}_{mate}.fastq.gz", "wt") as f:
+            for i in range(200):
+                seq = "".join(rnd.choice("ACGT") for _ in range(150))
+                f.write(f"@r{i}/{mate}\n{seq}\n+\n{'I' * 150}\n")
 PY
-printf 'sample\tfq1\tfq2\n%s\t%s\t%s\n' "$SAMPLE" \
-  "$WORK/input/${SAMPLE}_1.fastq.gz" "$WORK/input/${SAMPLE}_2.fastq.gz" > "$WORK/input/manifest.tsv"
+{
+  printf 'sample\tfq1\tfq2\tgroup\n'
+  for s in "${SAMPLES[@]}"; do
+    printf '%s\t%s\t%s\t%s\n' "$s" "$WORK/input/${s}_1.fastq.gz" "$WORK/input/${s}_2.fastq.gz" "stubgroup"
+  done
+} > "$WORK/input/manifest.tsv"
 
-echo "[stub] ROOT=$WORK sample=$SAMPLE modules=${MODULES[*]}"
+echo "[stub] ROOT=$WORK samples=${SAMPLES[*]} (group stubgroup) modules=${MODULES[*]}"
 for m in "${MODULES[@]}"; do
   echo "[stub] ===== $m ====="
   case "$m" in
-    ingest) "$WORK/bin/main.sh" run ingest --fastq "$WORK/input/manifest.tsv" ;;
-    *)      "$WORK/bin/main.sh" run "$m" --sample "$SAMPLE" "${SETS[@]}" ;;
+    ingest)  "$WORK/bin/main.sh" run ingest --fastq "$WORK/input/manifest.tsv" ;;
+    binning) "$WORK/bin/main.sh" run binning --sample "$SAMPLE" "${SETS[@]}" ;;   # bins the whole group
+    *)       for s in "${SAMPLES[@]}"; do "$WORK/bin/main.sh" run "$m" --sample "$s" "${SETS[@]}"; done ;;
   esac
 done
 echo "[stub] ===== summary ====="

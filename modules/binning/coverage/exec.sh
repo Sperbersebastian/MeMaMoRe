@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# env: ROOT SAMPLE CONTIGS BAM
+# env: ROOT SAMPLE CONTIGS BAM [BAMS]
+# BAMS (space-separated, binning group >= 2 samples): one depth column per BAM
+# (multi-sample coverage for MetaBAT2/Binny); otherwise the sample's own BAM.
 OUT="$ROOT/SRA/binning/coverage/$SAMPLE"
 LOG="$ROOT/logs/binning_coverage_${SAMPLE}.log"
 mkdir -p "$OUT"
@@ -20,11 +22,13 @@ else
 fi
 
 # JGI without referenceFasta to avoid header mismatches
+read -r -a DEPTH_BAMS <<<"${BAMS:-$SORTED_BAM}"
 micromamba run -n env_binning jgi_summarize_bam_contig_depths \
   --outputDepth "$DEP" \
   --minMapQual 10 \
   --percentIdentity 97 \
-  "$SORTED_BAM" >"$LOG" 2>&1
+  "${DEPTH_BAMS[@]}" >"$LOG" 2>&1
+echo "[coverage] ${#DEPTH_BAMS[@]} sample(s) in depth table"
 
 [[ -s "$DEP" ]] || { echo "[coverage] ERROR: depth empty for $SAMPLE" | tee -a "$LOG"; exit 2; }
 echo "[coverage] -> $DEP"

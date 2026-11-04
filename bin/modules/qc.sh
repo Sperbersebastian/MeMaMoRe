@@ -17,7 +17,7 @@ run_qc(){
   local MANI="$ROOT/SRA/reads/manifest.tsv"
   [[ -s "$MANI" ]] || { echo "Missing $MANI. Run ingest first."; exit 2; }
 
-  tail -n +2 "$MANI" | tr -d '\r' | while IFS=$'\t' read -r SID R1 R2; do
+  tail -n +2 "$MANI" | tr -d '\r' | while IFS=$'\t' read -r SID R1 R2 _GROUP; do
     [[ -n "${SAMPLE:-}" && "$SID" != "$SAMPLE" ]] && continue
 
     # choose inputs
