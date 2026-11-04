@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cluster/exec.sh — global clustering of all per-sample reps; builds concat if missing
+# cluster/exec.sh — global clustering of all per-sample plasmid representatives
 set -euo pipefail
 ROOT="${1:?}"; SAMPLE_IGNORED="${2:-_}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 
@@ -13,20 +13,27 @@ COV="${COV:-80}"
 CLSTR="${CLSTR:-$(find "$ROOT/external/Stampede-ClusterGenomes" -type f \( -name 'Cluster_genomes.pl' -o -path '*Cluster_genomes.pl' \) -print -quit)}"
 [[ -n "${CLSTR:-}" && -x "$CLSTR" ]] || { echo "[err] Cluster_genomes.pl not found/executable"; exit 2; }
 
-# 1) Build concat if missing by scanning per-sample reps
-if [[ ! -s "$GCONCAT" ]]; then
-  tmp="$GOUT/.tmp.concat.$$.fa"; : > "$tmp"
-  shopt -s nullglob
-  for rep in "$ROOT"/SRA/plasmids/*/cluster/plasmids_derep.*.fasta; do
-    [[ -s "$rep" ]] || continue
-    awk '
-      /^>/ {h=$0; if(!(h in seen)){seen[h]=1; keep=1; print; next} keep=0}
-      { if(keep) print }
-    ' "$rep" >> "$tmp"
-  done
-  shopt -u nullglob
-  [[ -s "$tmp" ]] || { echo "[global] keine Sample-Reps gefunden"; exit 3; }
+# 1) All-sample set, rebuilt from every sample's dereplicated plasmids. Headers
+#    get the sample as prefix ("<sample>|<tool>|<contig>"): contig names repeat
+#    across samples, and the sample is needed to link back (HOTSPOT, hosts).
+tmp="$GOUT/.tmp.concat.$$.fa"; : > "$tmp"
+shopt -s nullglob
+for rep in "$ROOT"/SRA/plasmids/*/cluster/plasmids_derep.*.fasta; do
+  [[ -s "$rep" ]] || continue
+  s="$(basename "$(dirname "$(dirname "$rep")")")"
+  [[ "$s" == _* ]] && continue
+  awk -v s="$s" '/^>/{sub(/^>/, ">" s "|")} {print}' "$rep" >> "$tmp"
+done
+shopt -u nullglob
+[[ -s "$tmp" ]] || { rm -f "$tmp"; echo "[global] no per-sample plasmid representatives yet"; exit 0; }
+if [[ -s "$GCONCAT" ]] && cmp -s "$tmp" "$GCONCAT"; then
+  rm -f "$tmp"
+else
   mv -f "$tmp" "$GCONCAT"
+  # set changed: recluster. Stampede reuses an existing <stem>-nucmer.out.* /
+  # -cover.csv without checking the input, so those must go as well.
+  rm -f "$GOUT"/.done.global.* "$GOUT"/plasmids_concat*_"${ID}"-"${COV}".{fna,clstr} \
+        "$GOUT"/plasmids_concat.all_samples-nucmer.out.* "$GOUT"/plasmids_concat.all_samples-cover.csv
 fi
 
 NALL=$(grep -c '^>' "$GCONCAT" || true)

@@ -103,7 +103,11 @@ CLSTR="${CLSTR:-$(find "$ROOT/external/Stampede-ClusterGenomes" -type f \( -name
 
 cp -f "$RAW" "$LRAW"
 FLAG="$SOUT/.done.sample.i${ID}.c${COV}"
-[[ -f "$FLAG" && "$RAW" -nt "$FLAG" ]] && rm -f "$FLAG"   # candidate set changed
+# candidate set changed: recluster; Stampede would silently reuse old nucmer/cover files
+if [[ -f "$FLAG" && "$RAW" -nt "$FLAG" ]] || ! cmp -s "$RAW" "$LRAW.last" 2>/dev/null; then
+  rm -f "$FLAG" "$SOUT"/plasmids_raw-nucmer.out.* "$SOUT"/plasmids_raw-cover.csv "$SOUT"/plasmids_raw_*"${ID}"-"${COV}".{fna,clstr}
+fi
+cp -f "$RAW" "$LRAW.last"
 [[ "$FORCE" == "1" ]] && rm -f "$FLAG" "$SOUT"/plasmids_raw_*"${ID}"-"${COV}".fna
 
 if [[ ! -f "$FLAG" ]]; then
@@ -140,27 +144,7 @@ fi
 [[ -s "$REP_OUT" ]] || { echo "[err] no representatives"; exit 5; }
 echo "[sample-derep] $(grep -c '^>' "$REP_OUT") reps -> $REP_OUT"
 
-# 3) Update global concat (header-dedup)
-tmp="$GOUT/.tmp.append.$$.fa"; : > "$tmp"
-awk '
-  /^>/ {h=$0; if(!(h in seen)){seen[h]=1; keep=1; print; next} keep=0}
-  { if(keep) print }
-' "$REP_OUT" > "$tmp"
-
-if [[ -s "$GCONCAT" ]]; then
-  cat "$GCONCAT" "$tmp" | awk '
-    /^>/ {h=$0; if(!(h in seen)){seen[h]=1; keep=1; print; next} keep=0}
-    { if(keep) print }
-  ' > "$GOUT/.new.concat"
-  mv -f "$GOUT/.new.concat" "$GCONCAT"
-else
-  mv -f "$tmp" "$GCONCAT"
-fi
-rm -f "$tmp"
-
-echo "$SAMPLE" >> "$GOUT/samples.list"
-awk '!seen[$0]++' "$GOUT/samples.list" > "$GOUT/.new.samples" && mv -f "$GOUT/.new.samples" "$GOUT/samples.list"
-echo "[global] appended $SAMPLE reps to $GCONCAT"
-
+# 3) The global step rebuilds the all-sample set from every sample's
+#    plasmids_derep.<sample>.fasta (headers prefixed with the sample)
 # 4) Trigger global clustering so one run suffices
 bash "$ROOT/modules/plasmids/cluster/exec.sh" "$ROOT" _ "${CPUS:-16}" "${FORCE:-0}" || true
