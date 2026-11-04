@@ -42,8 +42,15 @@ modules:
     min_len: 2000               # plasmid candidates entering union/clustering
     plasme_min_len: 0           # PLASMe post-filter (0 = off)
     hotspot_min_len: 1500       # HOTSPOT host prediction input
+  genomad:
+    # filters of geNomad end-to-end (plasmid, virus and typer runs)
+    preset: default             # default | conservative | relaxed
+    min_score: 0.7              # --min-score (geNomad default; ignored with a preset)
   viruses:
     min_len: 1000               # VirSorter2 --min-length, VIBRANT -l
+    virsorter2_min_score: 0.5   # VirSorter2 --min-score (its default)
+    vibrant_min_orfs: 4         # VIBRANT -o (its default, can only be increased)
+    vibrant_virome: false       # VIBRANT -virome for virome (VLP) samples
   args:
     mge: true                   # ISEScan + IntegronFinder 2 for ARG context
     is_window: 5000             # bp: ARG counts as "near IS" within this distance

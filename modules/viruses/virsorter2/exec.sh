@@ -37,6 +37,7 @@ cmd=( virsorter run
   -w "$OUT"
   -d "$VS2_DB"
   --include-groups "dsDNAphage,NCLDV,RNA,ssDNA,lavidaviridae"
+  --min-score "$(cfg modules.viruses.virsorter2_min_score 0.5)"
   -j "$CPUS"
   --min-length "$MINLEN"
   all

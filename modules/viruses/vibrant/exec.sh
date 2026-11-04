@@ -51,7 +51,9 @@ cmd=( VIBRANT_run.py
   -m "$VIBRANT_DB/files"
   -t "$CPUS"
   -l "$MINLEN"
+  -o "$(cfg modules.viruses.vibrant_min_orfs 4)"
 )
+case "$(cfg modules.viruses.vibrant_virome false)" in true|True|1|yes) cmd+=( -virome ) ;; esac
 echo "[vibrant] ${cmd[*]}"
 "${cmd[@]}"
 # VIBRANT reports setup/input problems in its log but still exits 0
