@@ -2,32 +2,72 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  lint-and-unit:
+  shell:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: bash -n
+        run: |
+          fail=0
+          while IFS= read -r f; do bash -n "$f" || fail=1; done < <(git ls-files '*.sh' ':!tests/stub/bin')
+          exit $fail
+      - name: shellcheck
+        # SC2097/SC2098: VAR="$VAR" cmd is used on purpose to pass env vars
+        # SC2034/SC2155: unused vars / declare-and-assign, style only
+        run: |
+          git ls-files -z '*.sh' ':!tests/stub/bin' | xargs -0 shellcheck -S warning \
+            -e SC2034,SC2155,SC2097,SC2098
 
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install test tools
-        run: pip install pytest shellcheck-py flask
-
-      - name: Bash syntax
-        run: |
-          rc=0
-          for f in $(git ls-files '*.sh'); do bash -n "$f" || rc=1; done
-          exit $rc
-
-      - name: ShellCheck (errors)
-        run: git ls-files '*.sh' | xargs shellcheck -S error
-
-      - name: Python syntax
-        run: python -m py_compile gui/app.py scripts/*.py tests/e2e/evaluate.py
-
-      - name: Unit tests
+      - run: pip install flask flake8 pytest
+      - name: py_compile
+        run: git ls-files -z '*.py' | xargs -0 python -m py_compile
+      - name: flake8 (errors only)
+        run: flake8 --select=E9,F63,F7,F82,F401,F841 gui scripts tests
+      - name: GUI smoke test
+        run: python tests/gui_smoke.py
+      - name: unit tests (E2E evaluator)
         run: python -m pytest -q tests/unit
+
+  stub-pipeline:
+    # Whole pipeline with fake tools (tests/stub): no envs, no databases, ~10 s
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install flask pyyaml
+      - name: gawk + a comma-decimal locale (stub runs use de_DE to catch number parsing bugs)
+        run: |
+          sudo apt-get install -y --no-install-recommends gawk locales
+          sudo locale-gen de_DE.UTF-8
+      - name: stub run (ingest -> qc -> assembly -> binning -> plasmids -> viruses -> args)
+        run: STUB_WORK="$RUNNER_TEMP/stub" tests/stub/run.sh
+      - name: re-run resumes without errors
+        run: STUB_WORK="$RUNNER_TEMP/stub" tests/stub/run.sh
+      - name: GUI shows results for every module
+        run: python tests/stub/check_gui.py "$RUNNER_TEMP/stub"
+      - name: optional steps may fail or find nothing (COMEBin crash, no Binny bins, no circular plasmids)
+        run: |
+          STUB_FAIL=run_comebin.sh STUB_BINNY_EMPTY=1 STUB_NO_CIRCULAR=1 STUB_WORK="$RUNNER_TEMP/stub_fail" tests/stub/run.sh
+          ls "$RUNNER_TEMP"/stub_fail/SRA/binning/magscot/stub/bins/*.fa
+      - name: upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stub-logs
+          path: ${{ runner.temp }}/stub/logs

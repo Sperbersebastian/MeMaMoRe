@@ -56,11 +56,19 @@ fi
 samtools index "$BAM"
 
 # --- Generate resistome counts ---
+# All genes with >= 1 read go to resistome_counts.all.tsv. Like AMR++ itself,
+# resistome_counts.tsv keeps only genes covered over >= AMRPP_MIN_GF % of their
+# length (default 80) and drops MEGARes entries that need SNP confirmation.
 COUNTS="$OUT/resistome_counts.tsv"
-echo "[amrplusplus] generating resistome count matrix"
-samtools idxstats "$BAM" | \
-  awk -F'\t' 'BEGIN{OFS="\t"; print "gene","length","mapped_reads","unmapped_reads"} $3>0{print $1,$2,$3,$4}' \
-  > "$COUNTS"
+ALLCOUNTS="$OUT/resistome_counts.all.tsv"
+MIN_GF="${AMRPP_MIN_GF:-80}"
+echo "[amrplusplus] generating resistome count matrix (gene fraction >= ${MIN_GF}%)"
+samtools coverage "$BAM" | \
+  awk -F'\t' 'BEGIN{OFS="\t"; print "gene","length","mapped_reads","gene_fraction"}
+               !/^#/ && $4>0 {print $1, $3-$2+1, $4, $6}' > "$ALLCOUNTS"
+awk -F'\t' -v min="$MIN_GF" 'BEGIN{OFS="\t"} NR==1 || ($4>=min && $1 !~ /RequiresSNPConfirmation/)' \
+  "$ALLCOUNTS" > "$COUNTS"
+echo "[amrplusplus] $(( $(wc -l < "$ALLCOUNTS") - 1 )) genes with reads, $(( $(wc -l < "$COUNTS") - 1 )) pass the gene-fraction filter"
 
 NGENES=$(tail -n +2 "$COUNTS" | wc -l)
 NREADS=$(tail -n +2 "$COUNTS" | awk '{s+=$3}END{print s+0}')

@@ -7,7 +7,10 @@ ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 
 IN="$ROOT/SRA/assemblies/metaplasmidspades/$SAMPLE/contigs.fasta"
 OUT="$ROOT/SRA/plasmids/$SAMPLE/viralverify"; mkdir -p "$OUT"
-[[ -s "$IN" ]] || { echo "[vv] no input: $IN"; exit 1; }
+if [[ ! -s "$IN" ]]; then
+  echo "[vv] no metaPlasmidSPAdes contigs for $SAMPLE, skipping viralVerify"
+  exit 0
+fi
 
 VV_HMM="${VV_HMM:-$ROOT/refdata/viralverify/pfam/Pfam-A.hmm}"
 VV_DB="${VV_DB:-}"
@@ -32,6 +35,7 @@ fi
 # bauen
 cmd=( "$CMD" -f "$IN" -o "$OUT" --hmm "$VV_HMM" -t "$CPUS" --thr "$THR" -p )
 [[ -n "$VV_DB" ]] && cmd+=( --db "$VV_DB" )
+# shellcheck disable=SC2206  # extra args are intentionally word-split
 [[ -n "$EXTRA" ]] && cmd+=( $EXTRA )
 
 echo "[vv] ${cmd[*]}"
@@ -40,7 +44,7 @@ echo "[vv] ${cmd[*]}"
 # Outputs normalisieren
 pl_out=""
 for f in "$OUT"/predicted_plasmids.fasta "$OUT"/plasmid_contigs.fasta "$OUT"/plasmids.fasta; do
-  [[ -s "$f" ]] && { pl_out="$f"; break; }
+  if [[ -s "$f" ]]; then pl_out="$f"; break; fi
 done
 [[ -n "$pl_out" ]] && ln -sf "$(basename "$pl_out")" "$OUT/viralverify_plasmids.fasta" || \
   echo "[vv] WARNING: no plasmid fasta found in $OUT"

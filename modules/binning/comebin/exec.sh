@@ -12,11 +12,11 @@ THREADS="${THREADS:-}"
 PARAMS_YAML="${PARAMS_YAML:-}"
 FORCE="${FORCE:-0}"
 
-# ── Micromamba (pin to ~/micromamba)
-MM="$HOME/micromamba/bin/micromamba"
-export MAMBA_ROOT_PREFIX="$HOME/micromamba"
+# ── Micromamba (respect MAMBA_ROOT_PREFIX like the rest of the pipeline)
+export MAMBA_ROOT_PREFIX="${MAMBA_ROOT_PREFIX:-$HOME/micromamba}"
 export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
-command -v "$MM" >/dev/null || { echo "[COMEBin] micromamba not at $MM"; exit 3; }
+MM="$(command -v micromamba || true)"
+[[ -n "$MM" ]] || { echo "[COMEBin] micromamba not found (MAMBA_ROOT_PREFIX=$MAMBA_ROOT_PREFIX)"; exit 3; }
 
 # ── Threads
 if [[ -z "$THREADS" ]]; then

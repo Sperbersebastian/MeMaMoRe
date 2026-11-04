@@ -46,7 +46,7 @@ if [[ ! -s "$RAW" ]]; then
 
   # MOB-recon
   for f in "$BASE"/mobrecon/*reconstructed*.fasta "$BASE"/mobrecon/*plasmid*.fasta; do
-    [[ -s "$f" ]] && awk -v p="mobrecon" '/^>/{sub(/^>/,">"p"|")}1' "$f" >> "$tmp"
+    if [[ -s "$f" ]]; then awk -v p="mobrecon" '/^>/{sub(/^>/,">"p"|")}1' "$f" >> "$tmp"; fi
   done
 
   # length filter
@@ -60,7 +60,11 @@ if [[ ! -s "$RAW" ]]; then
   ' "$tmp" > "$RAW"
   rm -f "$tmp"
 
-  [[ -s "$RAW" ]] || { echo "[union] no sequences after filter"; exit 3; }
+  if [[ ! -s "$RAW" ]]; then
+    # no plasmid candidates from any tool: normal for some samples
+    echo "[union] WARNING: no plasmid sequences >= ${MIN_LEN} bp for $SAMPLE; skipping clustering"
+    exit 0
+  fi
   echo "[union] $(grep -c '^>' "$RAW") seq -> $RAW"
 else
   echo "[union] cached -> $RAW"

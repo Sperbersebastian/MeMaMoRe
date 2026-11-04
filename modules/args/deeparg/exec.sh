@@ -64,9 +64,9 @@ fi
 
 # ---- 2) MAGs ----
 shopt -s nullglob
-MAG_BINS=( "$ROOT/SRA/binning/metabat2/$SAMPLE"/bin.*.fa )
-# also try magscot if it exists
-MAG_BINS+=( "$ROOT/SRA/binning/magscot/$SAMPLE"/bin.*.fa )
+# refined MAGScoT bins if present, else raw MetaBAT2 bins
+MAG_BINS=( "$ROOT/SRA/binning/magscot/$SAMPLE/bins"/*.fa )
+[[ ${#MAG_BINS[@]} -gt 0 ]] || MAG_BINS=( "$ROOT/SRA/binning/metabat2/$SAMPLE"/bin.*.fa )
 shopt -u nullglob
 if [[ ${#MAG_BINS[@]} -gt 0 ]]; then
   for bin in "${MAG_BINS[@]}"; do
@@ -81,10 +81,11 @@ fi
 
 # ---- 3) Plasmids ----
 PLASMIDS=""
-for p in "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_union.fasta" \
+for p in "$ROOT/SRA/plasmids/$SAMPLE/cluster/plasmids_derep.$SAMPLE.fasta" \
+         "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_union.fasta" \
          "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_concat.fasta" \
          "$ROOT/SRA/plasmids/$SAMPLE/union/"*.fasta; do
-  [[ -s "$p" ]] && { PLASMIDS="$p"; break; }
+  if [[ -s "$p" ]]; then PLASMIDS="$p"; break; fi
 done
 if [[ -n "$PLASMIDS" ]]; then
   _run_deeparg "$PLASMIDS" "plasmids" "plasmids"
@@ -98,7 +99,7 @@ VIRUSES=""
 for v in "$ROOT/SRA/viruses/$SAMPLE/union/viruses_union.fasta" \
          "$ROOT/SRA/viruses/$SAMPLE/union/viruses_concat.fasta" \
          "$ROOT/SRA/viruses/$SAMPLE/union/"*.fasta; do
-  [[ -s "$v" ]] && { VIRUSES="$v"; break; }
+  if [[ -s "$v" ]]; then VIRUSES="$v"; break; fi
 done
 if [[ -n "$VIRUSES" ]]; then
   _run_deeparg "$VIRUSES" "viruses" "viruses"

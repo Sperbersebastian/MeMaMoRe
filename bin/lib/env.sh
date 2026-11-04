@@ -33,6 +33,20 @@ export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
 command -v micromamba >/dev/null 2>&1 || { echo "[env] micromamba not found at $MAMBA_ROOT_PREFIX/bin"; exit 127; }
 eval "$(micromamba shell hook --shell=bash)"
 
+# ---------- numbers with a decimal point everywhere ----------
+# Under e.g. de_DE, awk/sort/printf read "0.99" as 0 (comma decimals), which
+# silently breaks score/coverage filters in the module scripts.
+export LC_NUMERIC=C
+
+# ---------- glibc >= 2.41 vs. TensorFlow (geNomad, CheckM2) ----------
+# Newer glibc refuses libraries that request an executable stack, so
+# "import tensorflow" fails with "cannot enable executable stack". This
+# tunable restores the old behaviour; older glibc ignores it.
+case ":${GLIBC_TUNABLES:-}:" in
+  *:glibc.rtld.execstack=*) ;;
+  *) export GLIBC_TUNABLES="${GLIBC_TUNABLES:+$GLIBC_TUNABLES:}glibc.rtld.execstack=2" ;;
+esac
+
 # ---------- Force-Flags (optional) ----------
 FORCE_ENV_MODE="${FORCE_ENV_MODE:-none}"     # none|all|one
 FORCE_ENV_TARGET="${FORCE_ENV_TARGET:-}"     # env- oder modul-name
@@ -68,11 +82,13 @@ _env_name(){
     vibrant)                echo "vibrant_env" ;;
     union_virus)            echo "plasmids_core" ;;
     checkv)                 echo "checkv_env" ;;
+    iphop)                  echo "iphop_env" ;;
     # --- ARG-Submodule ---
     args)                   echo "env_args" ;;
     deeparg)                echo "deeparg_env" ;;
     rgi)                    echo "rgi_env" ;;
     amrplusplus)            echo "amrplusplus_env" ;;
+    abricate)               echo "abricate_env" ;;
     summary_args)           echo "deeparg_env" ;;
     *)                      echo "UNKNOWN" ;;
   esac
@@ -134,7 +150,8 @@ _env_exists(){
   elif [[ "$name" == "env_args" ]]; then
     _list_env_names | grep -qx deeparg_env      &&
     _list_env_names | grep -qx rgi_env           &&
-    _list_env_names | grep -qx amrplusplus_env
+    _list_env_names | grep -qx amrplusplus_env   &&
+    _list_env_names | grep -qx abricate_env
   else
     _list_env_names | grep -qx "$name"
   fi
@@ -153,8 +170,8 @@ _recreate_env(){
 list_env_specs(){
   for m in ingest qc assembly binning sra_tools sim mapping_coverm coverm plasmids \
            viralverify plasme genomad mobrecon typer cluster union_cluster typing_hotspot \
-           virsorter2 vibrant checkv \
-           deeparg rgi amrplusplus summary_args; do
+           viruses virsorter2 vibrant checkv iphop \
+           args deeparg rgi amrplusplus abricate summary_args; do
     local env create
     env="$(_env_name "$m")"
     if create="$(_resolve_creator "$m")"; then :; else
@@ -175,7 +192,7 @@ ensure_env(){
   fi
 
   case "$env_name" in
-    env_qc|env_assembly|env_plasmids)
+    env_qc|env_assembly|env_plasmids|env_viruses|env_args)
       if [[ "$force" == "yes" ]]; then
         echo "[env] recreate $env_name via $create_script"; bash "$create_script"
       else
@@ -221,7 +238,7 @@ create_env_by_module(){
   fi
 
   case "$env" in
-    env_qc|env_assembly|env_plasmids)
+    env_qc|env_assembly|env_plasmids|env_viruses|env_args)
       echo "[env] recreate $env via $create"
       bash "$create"
       _env_exists "$env" || { echo "[env] failed to create $env"; exit 1; }
@@ -255,6 +272,17 @@ remove_env_by_module(){
       ;;
     env_plasmids)
       for e in env_assembly_core plasmids_core genomad_env plasme_env viralverify_env mobsuite_env hotspot_env stampede_env; do
+        micromamba env remove -n "$e" -y || true
+      done
+      ;;
+    env_viruses)
+      # shared envs (assembly/plasmids) are left in place
+      for e in virsorter2_env vibrant_env checkv_env; do
+        micromamba env remove -n "$e" -y || true
+      done
+      ;;
+    env_args)
+      for e in deeparg_env rgi_env amrplusplus_env abricate_env; do
         micromamba env remove -n "$e" -y || true
       done
       ;;

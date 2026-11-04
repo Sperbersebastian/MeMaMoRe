@@ -35,9 +35,10 @@ Core components include:
 | **Assembly**     | Metagenomic and plasmid-targeted assembly            | metaSPAdes, metaPlasmidSPAdes                                                  |
 | **Binning**      | Genome binning and refinement                        | MetaBAT2, Binny, COMEBin, MAGScoT, CheckM2                                     |
 | **Taxonomy**     | Genome classification via GTDB                       | GTDB-Tk (r226)                                                                 |
-| **Plasmids**     | Detection, clustering, and host prediction           | PLASMe, MOB-suite, geNomad (✓ core), ViralVerify (✓ core), HOTSPOT (⚠ partial) |
-| **Viruses** ⚠    | Viral prediction and QC *(not implemented yet)*      | geNomad, VirSorter2, VIBRANT, CheckV, iPHoP                                    |
-| **Functional** ⚠ | ARG and virulence detection *(not implemented yet)*  | DeepARG, VFDB, CARD                                                            |
+| **Plasmids**     | Detection, clustering, typing and host prediction    | metaPlasmidSPAdes, ViralVerify, geNomad, PLASMe, MOB-suite, Stampede, HOTSPOT  |
+| **Viruses**      | Viral prediction, dereplication, QC, host prediction | metaviralSPAdes, ViralVerify, geNomad, VirSorter2, VIBRANT, CheckV, iPHoP (optional) |
+| **ARGs**         | Resistance genes, virulence factors, replicons       | DeepARG, RGI/CARD, AMR++/MEGARes, ABRicate (VFDB, ResFinder, PlasmidFinder)    |
+| **Summary**      | Multi-sample comparison tables                       | `bin/main.sh summary` → `SRA/summary/`                                         |
 | **Simulation** ⚠ | Synthetic reads and controlled variation *(partial)* | ART, custom `sim_env`                                                          |
 | **Web GUI**      | Dashboard for sample management and visualization    | Flask, HTML/JS/CSS                                                             |
 
@@ -56,8 +57,8 @@ MeMaMoRe/
 │       ├── assembly.sh      # Assembly orchestrator
 │       ├── binning.sh       # Binning/refinement orchestrator
 │       ├── plasmids.sh      # Plasmid workflow orchestrator
-│       ├── viruses.sh       # ⚠ placeholder for viral analysis
-│       ├── functional.sh    # ⚠ placeholder for ARG/virulence annotation
+│       ├── viruses.sh       # Virus workflow orchestrator
+│       ├── args.sh          # ARG / virulence workflow orchestrator
 │       └── sim.sh           # Simulation orchestrator
 ├── envs/                    # Micromamba environment creation scripts
 │   ├── create_env_plasmids.sh
@@ -75,12 +76,15 @@ MeMaMoRe/
 │   ├── binning/
 │   ├── plasmids/
 │   ├── viruses/
-│   ├── functional/
-│   └── qc/
+│   ├── args/
+│   ├── qc/
+│   └── summary/             # multi-sample tables (bin/main.sh summary)
+├── scripts/                 # helpers (params merge, test data, multi-sample summary)
+├── tests/                   # GUI smoke test, stub pipeline (fake tools) for CI
 └── config/                  # YAML configurations (params, testsets)
 ```
 
-⚠ Modules **viruses**, **functional**, and **simulation** are placeholders or partially implemented.
+⚠ The **simulation** module is partially implemented.
 
 ---
 
@@ -88,8 +92,8 @@ MeMaMoRe/
 
 ### 1. Prerequisites
 
-* Linux (tested on Ubuntu 22.04 and CentOS 7)
-* Micromamba or Conda
+* Linux (tested on Ubuntu 22.04, 25.x and CentOS 7); Windows via WSL2
+* Micromamba (`curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C ~/micromamba bin/micromamba`)
 * Git ≥ 2.30
 * Bash ≥ 5.0
 
@@ -103,19 +107,15 @@ cd MeMaMoRe
 ### 3. Create Environments
 
 ```bash
-bin/main.sh env create plasmids --force
+bin/main.sh env create all          # or one module: ingest|qc|assembly|binning|plasmids|viruses|args|...
+bin/main.sh env list                # module -> env -> creator script
 ```
 
-Installs:
-
-* `plasmids_core`
-* `plasme_env`
-* `mobsuite_env`
-* `hotspot_env`
-* `genomad_env`
-* `viralverify_env`
-
-⚠ `bin/main.sh env create all` not yet implemented.
+Missing environments are also created on first use. Reference databases live in
+`refdata/` (override with `REFDATA_BASE`, `GTDBTK_DATA_PATH`, `VIBRANT_DB`,
+`IPHOP_DB`); most are downloaded on first run. Rough needs for everything:
+~300 GB disk (plus ~340 GB for the optional iPHoP DB), and ≥64 GB RAM for
+GTDB-Tk (skipped with a message on smaller machines, `GTDBTK_FORCE=1` overrides).
 
 ---
 
@@ -159,6 +159,20 @@ bin/main.sh run plasmids --global-cluster
 bin/main.sh run binning --sample test_sample
 ```
 
+**Viruses, ARGs/virulence, everything:**
+
+```bash
+bin/main.sh run viruses --sample test_sample
+bin/main.sh run args --sample test_sample
+bin/main.sh run all --sample test_sample
+```
+
+**Compare all samples** (tables in `SRA/summary/`, also shown on the GUI dashboard):
+
+```bash
+bin/main.sh summary                 # or: --samples s1,s2
+```
+
 ---
 
 ## **Web GUI (Dashboard)**
@@ -166,7 +180,7 @@ bin/main.sh run binning --sample test_sample
 MeMaMoRe includes a fully-featured Web GUI for easier management of samples, pipeline execution, and result visualization.
 
 ### Features
-* **Dashboard:** Overview of processed samples, system disk usage, and quick stats.
+* **Dashboard:** Overview of processed samples, running jobs, and a multi-sample comparison table.
 * **Samples Management:** Add new samples, including uploading custom FASTA contigs, and manage existing ones.
 * **Run Pipeline:** Configure and launch different pipeline modules (QC, Assembly, Binning, etc.) per sample.
 * **Results Visualization:** Interactive tables, QC/Assembly tabs, clustering charts for ARG/Virus (where available), and CSV exports.
@@ -213,8 +227,12 @@ Scripts handle:
 | **PLASMe DB**             | `refdata/plasme/DB/`         | Plasmid detection           | ✓                     |
 | **geNomad DB**            | `refdata/genomad/`           | Virus/plasmid detection     | ✓                     |
 | **ViralVerify DB**        | `refdata/viralverify/`       | Auxiliary plasmid data      | ✓                     |
-| **HOTSPOT DB**            | `refdata/HOTSPOT/database/`  | Plasmid host prediction     | ⚠ partial             |
-| **CARD / DeepARG / VFDB** | `refdata/functional/`        | ARG and virulence databases | ⚠ pending integration |
+| **HOTSPOT DB**            | `external/HOTSPOT/database/` | Plasmid host prediction     | ✓                     |
+| **VirSorter2 / VIBRANT / CheckV** | `refdata/{virsorter2,vibrant,checkv}/` | Virus detection and QC | ✓ (auto-download) |
+| **iPHoP** (optional)      | `refdata/iphop/*_rw/`        | Virus host prediction       | ~340 GB, manual download |
+| **DeepARG / CARD / MEGARes** | `refdata/{deeparg,card,amrplusplus}/` | ARG detection     | ✓ (auto-download)     |
+| **VFDB / ResFinder / PlasmidFinder** | bundled with ABRicate | Virulence, ARGs, replicons | ✓                 |
+| **CheckM2**               | `refdata/checkm2/`           | MAG quality                 | ✓ (auto-download)     |
 
 ---
 
@@ -222,14 +240,15 @@ Scripts handle:
 
 ```
 SRA/
-└── test_sample/
-    ├── qc/
-    ├── assemblies/spades/contigs.fasta
-    ├── binning/comebin/
-    ├── plasmids/plasme_hp/
-    ├── plasmids/mobsuite/
-    ├── viruses/genomad/        # ⚠ placeholder
-    └── functional/deeparg/     # ⚠ placeholder
+├── reads/<sample>/                     # normalized read links + manifest.tsv
+├── qc/{fastp,fastqc,multiqc}/<sample>/
+├── assemblies/{spades,contig_qc,metaplasmidspades,metaviralspades}/<sample>/
+├── binning/{metabat2,binny,comebin,magscot,checkm2,gtdbtk,barrnap,trnascan}/<sample>/
+│                                       # refined MAGs: binning/magscot/<sample>/bins/*.fa
+├── plasmids/<sample>/{viralverify,genomad,plasme,mobrecon,union,cluster,typer,hotspot}/
+├── viruses/<sample>/{viralverify,genomad,virsorter2,vibrant,union,checkv,iphop}/
+├── args/<sample>/{deeparg,rgi,amrplusplus,abricate,summary}/
+└── summary/                            # samples_overview.tsv, mags.tsv, viruses.tsv, *_matrix.tsv
 ```
 
 Each module writes outputs in its own subfolder with `.done` markers to support resumable execution.
@@ -238,13 +257,47 @@ Each module writes outputs in its own subfolder with `.done` markers to support 
 
 ## **Testing**
 
-### Unit tests and linting (run in CI)
+Two simulated test sets from public NCBI genomes (`scripts/make_mini_testdata.py`):
+
+* `--profile mini` (default): phiX174, lambda, plasmid F, ~2 MB of reads, minutes.
+  Covers ingest, QC, assembly and geNomad.
+* `--profile mock`: two samples (`mockA`, `mockB`) with different abundances of
+  *S. aureus*, *H. pylori*, *M. pneumoniae*, the ARG plasmid pEK499 (CTX-M-15,
+  TEM-1, OXA-1, …) and phages T4/lambda/phiX; ~70 MB of reads per sample.
+  Covers every module including binning and the multi-sample summary.
 
 ```bash
-pip install pytest shellcheck-py
-python -m pytest -q tests/unit
-git ls-files '*.sh' | xargs shellcheck -S error
+python3 scripts/make_mini_testdata.py --profile mock      # -> test/mock/
+bin/main.sh run ingest --fastq test/mock/manifest.tsv
+for s in mockA mockB; do
+  for m in qc assembly binning plasmids viruses args; do bin/main.sh run $m --sample $s; done
+done
+bin/main.sh summary
 ```
+
+Reference run (laptop, 14 cores, 15 GB RAM; ~45 min per sample, VirSorter2 ~20 min of it):
+3 MAGs per sample (*H. pylori* ~100 %, *M. pneumoniae* 96–98 %, *S. aureus* 76–100 %
+completeness by CheckM2), the pEK499 genes (CTX-M-15, OXA-1, TEM, sul1, tet(A), …) via
+ResFinder/RGI/DeepARG, IncFII/IncFIA replicons, *H. pylori* cag/vac and *S. aureus*
+virulence genes via VFDB, and lambda/phiX/T4 plus *S. aureus* prophages as viruses.
+GTDB-Tk is skipped below 64 GB RAM; COMEBin fails on samples this small (too few
+contigs to train), which the pipeline tolerates.
+
+### Stub run (no environments, no databases)
+
+`tests/stub/run.sh` runs the whole chain (ingest → qc → assembly → binning →
+plasmids → viruses → args) in a few seconds with fake tools that write
+correctly named outputs. It exercises the module scripts, the `.done`
+bookkeeping and the GUI, not the tools themselves. It works in a throwaway
+directory (`STUB_WORK`, default: a new temp dir) and never touches `SRA/` or
+`refdata/`. Needs `python3` with PyYAML and `gawk`; the GUI check needs Flask.
+
+```bash
+STUB_WORK=/tmp/memamo_stub tests/stub/run.sh            # or: tests/stub/run.sh qc assembly
+python3 tests/stub/check_gui.py /tmp/memamo_stub        # GUI API shows results per module
+```
+
+CI (`.github/workflows/ci.yml`) runs this on every push/PR.
 
 ### End-to-end test with ground truth
 
@@ -261,6 +314,13 @@ tests/e2e/run_e2e.sh --skip-binning       # faster, without binning/GTDB-Tk
 Results land in `tests/e2e/results/<set>/` (`metrics.tsv`, `mags.tsv`, `timings.tsv`,
 `versions.tsv`, one lockfile per environment). The run needs the module databases and is not part of CI.
 
+### Unit tests
+
+```bash
+pip install pytest
+python -m pytest -q tests/unit      # scoring code of the end-to-end test
+```
+
 ---
 
 ## **Development Notes**
@@ -269,11 +329,7 @@ Results land in `tests/e2e/results/<set>/` (`metrics.tsv`, `mags.tsv`, `timings.
 * Modular orchestration by module
 * Automatic environment setup
 * CUDA support where available
-* ⚠ Not yet available:
-
-  * Virus and functional modules
-  * Multi-sample summary
-  * Combined “env create all”
+* CI: `bash -n`, shellcheck, flake8, GUI smoke test and the stub pipeline on every push/PR
 
 ---
 
@@ -315,17 +371,22 @@ A complete reference checklist for all tools used in MeMaMoRe is provided for ci
 * Camargo AP *et al.* 2024. *geNomad.* *Nat Biotechnol* 42:1303–1312.
 * Ji W *et al.* 2023. *HOTSPOT.* *Bioinformatics* 39(5):btad283.
 
-### **Viral Analysis (Planned)**
+### **Viral Analysis**
 
 * Guo J *et al.* 2021. *VirSorter2.* *Microbiome* 9:37.
 * Kieft K *et al.* 2020. *VIBRANT.* *Microbiome* 8:90.
 * Nayfach S *et al.* 2021. *CheckV.* *Nat Biotechnol* 39:578–585.
 * Roux S *et al.* 2023. *iPHoP.* *PLOS Biol.* 21(4):e3002083.
 
-### **Functional Annotation (Planned)**
+### **ARGs and Virulence**
 
 * Arango-Argoty G *et al.* 2018. *DeepARG.* *Microbiome* 6:23.
 * Alcock BP *et al.* 2023. *CARD.* *Nucleic Acids Res.* 51(D1):D690–D699.
+* Bonin N *et al.* 2023. *MEGARes and AMR++ v3.0.* *Nucleic Acids Res.* 51(D1):D744–D752.
+* Seemann T. *ABRicate.* github.com/tseemann/abricate.
+* Liu B *et al.* 2022. *VFDB 2022.* *Nucleic Acids Res.* 50(D1):D912–D917.
+* Florensa AF *et al.* 2022. *ResFinder.* *Microb Genom* 8(1):000748.
+* Carattoli A *et al.* 2014. *PlasmidFinder.* *Antimicrob Agents Chemother* 58(7):3895–3903.
 
 ---
 

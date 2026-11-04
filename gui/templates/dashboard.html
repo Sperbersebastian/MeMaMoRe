@@ -24,6 +24,19 @@
     </div>
   </div>
 </div>
+<div class="panel" style="margin-top:16px">
+  <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
+    <span>Sample comparison</span>
+    <span>
+      <span id="summary-msg" style="color:var(--text-muted);font-size:12px;margin-right:8px"></span>
+      <button class="btn btn-secondary" style="padding:6px 14px;font-size:12px" onclick="refreshSummary()">↻ Rebuild</button>
+      <button class="btn btn-secondary" style="padding:6px 14px;font-size:12px" onclick="exportTableCSV(window._summary.overview, 'samples_overview.csv')">📥 CSV</button>
+    </span>
+  </div>
+  <div class="panel-body" style="overflow-x:auto" id="summary-body">
+    <p style="color:var(--text-muted)">Loading...</p>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -80,7 +93,30 @@ async function loadDashboard() {
   }
 }
 
+// ── multi-sample summary (SRA/summary/, built by `bin/main.sh summary`) ──
+const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function loadSummary() {
+  window._summary = await (await fetch('/api/summary')).json();
+  const rows = window._summary.overview || [];
+  const body = document.getElementById('summary-body');
+  if (!rows.length) {
+    body.innerHTML = '<p style="color:var(--text-muted)">No summary yet. Click “Rebuild” or run <code>bin/main.sh summary</code>.</p>';
+    return;
+  }
+  const cols = (window._summary.columns || {}).overview || Object.keys(rows[0]);
+  body.innerHTML = `<table><thead><tr>${cols.map(c => `<th>${escH(c)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr>${cols.map(c => `<td>${escH(r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+async function refreshSummary() {
+  const msg = document.getElementById('summary-msg');
+  msg.textContent = 'rebuilding...';
+  const r = await (await fetch('/api/summary/refresh', {method: 'POST'})).json();
+  msg.textContent = r.ok ? r.message.replace(/ ->.*/, '') : ('error: ' + (r.error || '').slice(-200));
+  loadSummary();
+}
+
 loadDashboard();
+loadSummary();
 setInterval(loadDashboard, 8000);
 </script>
 {% endblock %}

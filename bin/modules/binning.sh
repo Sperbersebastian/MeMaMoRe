@@ -103,9 +103,12 @@ run_binning(){
       "$ROOT/SRA/binning/binny/$SID/contigs_to_bin.with_set.tsv" \
       "$ROOT/SRA/binning/comebin/$SID/contigs_to_bin.with_set.tsv"
     do
-      [[ -s "$f" ]] && cat "$f" >> "$MAGSCOT_IN"
+      if [[ -s "$f" ]]; then cat "$f" >> "$MAGSCOT_IN"; fi
     done
-    [[ -s "$MAGSCOT_IN" ]] || { echo "[magscot] $SID no bin inputs"; continue; }
+    # MetaBAT2 writes no *.with_set.tsv; magscot/exec.sh builds maps from its bin.*.fa itself
+    if [[ ! -s "$MAGSCOT_IN" ]] && ! compgen -G "$ROOT/SRA/binning/metabat2/$SID/bin.*.fa" >/dev/null; then
+      echo "[magscot] $SID no bin inputs"; continue
+    fi
 
     # ---- MAGScoT ----
     ROOT="$ROOT" SAMPLE="$SID" MAGS_ROOT="$ROOT/external/MAGScoT" \

@@ -227,9 +227,40 @@ function renderARGResults(data, container) {
       </div>
     </div>
     <div style="margin-top:8px;color:var(--text-muted);font-size:12px" id="table-count"></div>
+    ${renderKeyTable('Virulence factors (VFDB)', data.virulence,
+        ['context','label','gene','product','contig','identity','coverage'], 'virulence_factors.csv')}
+    ${renderKeyTable('Plasmid replicons (PlasmidFinder)', data.replicons,
+        ['context','label','replicon','contig','identity','coverage'], 'plasmid_replicons.csv')}
   `;
 
   filterTable();
+}
+
+// Small read-only table for a list of row objects; values are HTML-escaped
+function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function renderKeyTable(title, rows, cols, csvName) {
+  rows = rows || [];
+  if (rows.length === 0) return '';
+  const key = csvName.replace(/\W/g, '_');
+  window._keyTables = window._keyTables || {};
+  window._keyTables[key] = rows;
+  return `
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>${escHtml(title)} (${rows.length})</span>
+        <button class="btn btn-secondary" style="padding:6px 14px;font-size:12px"
+          onclick="exportTableCSV(window._keyTables['${key}'], '${csvName}')">📥 Export CSV</button>
+      </div>
+      <div class="panel-body" style="overflow-x:auto;max-height:400px;overflow-y:auto">
+        <table>
+          <thead><tr>${cols.map(c => `<th>${escHtml(c)}</th>`).join('')}</tr></thead>
+          <tbody>${rows.slice(0, 500).map(r =>
+            `<tr>${cols.map(c => `<td>${escHtml(r[c])}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 function filterTable() {
@@ -297,6 +328,8 @@ function renderVirusResults(data, container) {
         </table>
       </div>
     </div>
+    ${renderKeyTable('Host prediction (iPHoP, genus level)', data.iphop,
+        ['Virus','Host genus','Confidence score','List of methods'], 'iphop_host_genus.csv')}
   `;
 }
 

@@ -36,6 +36,7 @@ Direct helpers:
   bin/main.sh plasmids_env
   bin/main.sh plasmids --sample ID [--cpus N] [--force|--resume]
   bin/main.sh gui [--port 5000] [--host 127.0.0.1]
+  bin/main.sh summary [--samples s1,s2,...]      (multi-sample tables -> SRA/summary/)
 
 Modules:
   ingest, qc, assembly, binning, sim, plasmids, viruses, args, all
@@ -127,7 +128,7 @@ env_remove(){ local target="${1:-}"; [[ -z "$target" ]] && { echo "[err] env rem
 cmd="${1:-}"; shift || true
 case "$cmd" in
   list)
-    ls -1 "$ROOT/bin/modules"/*.sh 2>/dev/null | xargs -n1 basename | sed 's/\.sh$//' || true
+    for f in "$ROOT/bin/modules"/*.sh; do [[ -e "$f" ]] && basename "$f" .sh; done
     ;;
   env)
     sub="${1:-}"; shift || true
@@ -202,6 +203,9 @@ case "$cmd" in
       all)      : "${SAMPLE:?need --sample for plasmids/viruses in all}"; run_all_wrap ;;
       *) usage; exit 2 ;;
     esac
+    ;;
+  summary)
+    run_in_env env_sra_tools python "$ROOT/scripts/summarize_samples.py" "$ROOT" "$@"
     ;;
   gui)
     PORT="5000"
