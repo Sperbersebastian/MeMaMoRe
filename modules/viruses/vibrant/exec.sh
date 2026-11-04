@@ -22,11 +22,21 @@ command -v VIBRANT_run.py >/dev/null 2>&1 || { echo "[vibrant] VIBRANT_run.py no
 # Override with VIBRANT_DB; defaults to the project refdata dir.
 VIBRANT_DB="${VIBRANT_DB:-$ROOT/refdata/vibrant/db}"
 export VIBRANT_DATA_PATH="$VIBRANT_DB"
-if [[ ! -s "$VIBRANT_DB/databases/Pfam-A_v32.HMM.h3i" ]]; then
+DBD="$VIBRANT_DB/databases"
+HMMS=(KEGG_profiles_prokaryotes.HMM Pfam-A_v32.HMM VOGDB94_phage.HMM)
+_have_hmm(){ [[ -s "$DBD/$1" || -s "$DBD/$1.h3p" ]]; }
+if ! _have_hmm "${HMMS[0]}" || ! _have_hmm "${HMMS[1]}" || ! _have_hmm "${HMMS[2]}" || [[ ! -d "$VIBRANT_DB/files" ]]; then
   echo "[vibrant] DB missing or incomplete -> downloading and setting up"
   command -v download-db.sh >/dev/null 2>&1 || { echo "[vibrant] download-db.sh not found"; exit 4; }
   download-db.sh "$VIBRANT_DB" || { echo "[vibrant] DB setup failed"; exit 5; }
 fi
+# an interrupted setup can leave profiles un-pressed ("could not identify KEGG HMM files")
+for h in "${HMMS[@]}"; do
+  if [[ -s "$DBD/$h" ]] && { [[ ! -s "$DBD/$h.h3f" ]] || [[ ! -s "$DBD/$h.h3i" ]] || [[ ! -s "$DBD/$h.h3m" ]] || [[ ! -s "$DBD/$h.h3p" ]]; }; then
+    echo "[vibrant] hmmpress $h (completing DB setup)"
+    hmmpress -f "$DBD/$h" >/dev/null
+  fi
+done
 
 # VIBRANT expects the input basename for output naming
 IN_BASE="$(basename "$IN" .fasta)"
@@ -34,11 +44,18 @@ IN_BASE="$(basename "$IN" .fasta)"
 cmd=( VIBRANT_run.py
   -i "$IN"
   -folder "$OUT"
+  -d "$DBD"
+  -m "$VIBRANT_DB/files"
   -t "$CPUS"
   -l 1000
 )
 echo "[vibrant] ${cmd[*]}"
 "${cmd[@]}"
+# VIBRANT reports setup/input problems in its log but still exits 0
+VLOG="$OUT/VIBRANT_log_run_${IN_BASE}.log"
+if grep -q "VIBRANT error" "$VLOG" 2>/dev/null; then
+  echo "[vibrant] $(grep -m1 "VIBRANT error" "$VLOG")"; exit 6
+fi
 
 # normalise outputs – VIBRANT creates a nested structure
 VIBRANT_DIR="$OUT/VIBRANT_${IN_BASE}"

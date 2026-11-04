@@ -79,7 +79,7 @@ _run_step "union_virus"     "$MOD/union/exec.sh"        "$SAMPLE"
 _run_step "checkv"          "$MOD/checkv/exec.sh"       "$SAMPLE"
 # 7) iPHoP host prediction: optional, only with a downloaded DB (~340 GB);
 #    checked here so the (large) iphop_env is not created without a DB
-IPHOP_DB="${IPHOP_DB:-$(find "$ROOT/refdata/iphop" -mindepth 1 -maxdepth 1 -type d -name '*_rw' 2>/dev/null | sort | tail -n1)}"
+IPHOP_DB="${IPHOP_DB:-$(find "$ROOT/refdata/iphop" -mindepth 1 -maxdepth 1 -type d -name '*_rw' 2>/dev/null | sort | tail -n1 || true)}"
 if [[ -n "$IPHOP_DB" && -d "$IPHOP_DB" ]]; then
   export IPHOP_DB
   _run_step "iphop"         "$MOD/iphop/exec.sh"        "$SAMPLE"

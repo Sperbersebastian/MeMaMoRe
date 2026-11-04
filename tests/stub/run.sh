@@ -41,7 +41,8 @@ fake refdata/viralverify/pfam/Pfam-A.hmm
 fake refdata/genomad/genomad_db/version.txt
 mkdir -p "$WORK/refdata/iphop/Aug_2023_pub_rw"
 fake refdata/virsorter2/db/Done_all_setup
-fake refdata/vibrant/db/databases/Pfam-A_v32.HMM.h3i
+for h in Pfam-A_v32 KEGG_profiles_prokaryotes VOGDB94_phage; do for x in h3f h3i h3m h3p; do fake "refdata/vibrant/db/databases/$h.HMM.$x"; done; done
+fake refdata/vibrant/db/files/VIBRANT_names.tsv
 fake refdata/checkv/checkv-db-v1.5/genome_db/checkv_reps.faa
 fake refdata/checkv/checkv-db-v1.5/genome_db/checkv_reps.dmnd
 mkdir -p "$WORK/refdata/amrplusplus/megares_v3" "$WORK/refdata/card/localDB"

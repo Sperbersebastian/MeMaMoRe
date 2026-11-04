@@ -5,7 +5,7 @@ ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 
 IN="$ROOT/SRA/plasmids/$SAMPLE/cluster/plasmids_derep.$SAMPLE.fasta"
 OUT="$ROOT/SRA/plasmids/$SAMPLE/hotspot"; mkdir -p "$OUT"
-[[ -s "$IN" ]] || { echo "[hotspot] no input: $IN"; exit 1; }
+[[ -s "$IN" ]] || { echo "[hotspot] no dereplicated plasmids for $SAMPLE, skipping"; exit 0; }
 
 # Paths
 HOTSPOT_DIR="${HOTSPOT_DIR:-$ROOT/external/HOTSPOT}"

@@ -24,7 +24,7 @@ mkdir -p "$SCRATCH" "$TMPDIR_IN"
 export TMPDIR="$TMPDIR_IN"
 
 # --- inputs
-[[ -d "$BINS" ]] || { echo "[gtdbtk] ERROR: bins dir not found: $BINS"; exit 1; }
+[[ -d "$BINS" ]] || { echo "[gtdbtk] no refined bins ($BINS missing) -> skip"; exit 0; }
 shopt -s nullglob
 fa_files=( "$BINS"/*.fa )
 echo "[gtdbtk] .fa files found: ${#fa_files[@]} in $BINS"

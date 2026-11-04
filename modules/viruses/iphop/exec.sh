@@ -17,7 +17,7 @@ DONE="$OUT/.done"
 
 command -v iphop >/dev/null 2>&1 || { echo "[iphop] iphop not in PATH"; exit 3; }
 
-DB="${IPHOP_DB:-$(find "$ROOT/refdata/iphop" -mindepth 1 -maxdepth 1 -type d -name '*_rw' 2>/dev/null | sort | tail -n1)}"
+DB="${IPHOP_DB:-$(find "$ROOT/refdata/iphop" -mindepth 1 -maxdepth 1 -type d -name '*_rw' 2>/dev/null | sort | tail -n1 || true)}"
 [[ -n "$DB" && -d "$DB" ]] || { echo "[iphop] DB missing (set IPHOP_DB or download into $ROOT/refdata/iphop)"; exit 2; }
 
 UNION="$ROOT/SRA/viruses/$SAMPLE/union/viruses_union.fasta"

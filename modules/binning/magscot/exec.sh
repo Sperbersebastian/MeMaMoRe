@@ -121,10 +121,16 @@ FAA="$OUT/prodigal.faa"
 [[ -s "$TMP/tigr.tbl" ]] || micromamba run -n env_binning hmmsearch -o "$TMP/tigr.out" --tblout "$TMP/tigr.tbl" --noali --notextw --cut_nc --cpu "$CPUS" "$HMM_TIGR" "$FAA"
 [[ -s "$TMP/pfam.tbl" ]] || micromamba run -n env_binning hmmsearch -o "$TMP/pfam.out" --tblout "$TMP/pfam.tbl" --noali --notextw --cut_nc --cpu "$CPUS" "$HMM_PFAM" "$FAA"
 
+# MAGScoT --hmm: gene id, marker accession, e-value (tblout: $1 target, $4 query acc, $5 e-value).
+# Older runs wrote "marker, gene, 0", which made MAGScoT score no bin at all: rebuild those.
 HMM_MAP="$OUT/example.hmm"
+if [[ -s "$HMM_MAP" ]] && awk -F'\t' 'NR==1{exit !($1 ~ /^(PF|TIGR)[0-9]/)}' "$HMM_MAP"; then
+  echo "[magscot] rebuilding $HMM_MAP (old column order) and discarding MAGScoT results built from it"
+  rm -f "$HMM_MAP" "$OUT"/MAGScoT.*
+fi
 if [[ ! -s "$HMM_MAP" ]]; then
-  awk 'BEGIN{OFS="\t"} $1!~/^#/{print $4,$1,$14}' "$TMP/tigr.tbl" > "$TMP/tigr.map"
-  awk 'BEGIN{OFS="\t"} $1!~/^#/{print $4,$1,$14}' "$TMP/pfam.tbl" > "$TMP/pfam.map"
+  awk 'BEGIN{OFS="\t"} $1!~/^#/{print $1,$4,$5}' "$TMP/tigr.tbl" > "$TMP/tigr.map"
+  awk 'BEGIN{OFS="\t"} $1!~/^#/{print $1,$4,$5}' "$TMP/pfam.tbl" > "$TMP/pfam.map"
   cat "$TMP/pfam.map" "$TMP/tigr.map" > "$HMM_MAP"
   cols="$(awk -F'\t' 'NF{print NF; exit}' "$HMM_MAP")"
   [[ "$cols" -eq 3 ]] || { echo "[magscot] bad HMM map ($cols cols) → $HMM_MAP"; exit 1; }
@@ -134,22 +140,28 @@ INPUT_FOR_MAGS="$RAW_NORM"
 # MAGScoT writes <prefix>.refined.contig_to_bin.out (binnew \t contig), <prefix>.refined.out, <prefix>.scores.out
 REFINED="$OUT/MAGScoT.refined.contig_to_bin.out"
 if [[ ! -s "$REFINED" ]]; then
-  micromamba run -n env_binning Rscript "$SCRIPT" -i "$INPUT_FOR_MAGS" --hmm "$HMM_MAP" -o "$OUT/MAGScoT"
+  # MAGScoT's bin-merging step crashes when no bin pair qualifies for merging
+  # (left_join on an empty table); retry without merging in that case.
+  if ! micromamba run -n env_binning Rscript "$SCRIPT" -i "$INPUT_FOR_MAGS" --hmm "$HMM_MAP" -o "$OUT/MAGScoT"; then
+    echo "[magscot] MAGScoT failed, retrying with --skip_merge_bins"
+    micromamba run -n env_binning Rscript "$SCRIPT" -i "$INPUT_FOR_MAGS" --hmm "$HMM_MAP" -o "$OUT/MAGScoT" --skip_merge_bins
+  fi
 else
   echo "[magscot] skip Rscript, results exist: $REFINED"
 fi
 [[ -s "$REFINED" ]] || { echo "[magscot] no refined bins ($REFINED missing)"; exit 0; }
 
 # ---------- refined bins -> bins/<bin>.fa (input for CheckM2, barrnap/tRNAscan, GTDB-Tk) ----------
+# MAGScoT prefixes refined bin names with the -o value, i.e. the full output path: keep the basename
 BINS_DIR="$OUT/bins"
 rm -rf "$BINS_DIR"; mkdir -p "$BINS_DIR"
 awk -v dir="$BINS_DIR" '
-  FNR==NR { if (FNR>1 && NF>=2) bin[$2]=$1; next }
+  FNR==NR { if (FNR>1 && NF>=2) { b=$1; sub(/.*\//, "", b); bin[$2]=b }; next }
   /^>/    { id=substr($1,2); out=(id in bin) ? dir "/" bin[id] ".fa" : ""; if (out!="") print > out; next }
   out!="" { print > out }
 ' "$REFINED" "$CONTIGS"
 # refined contig->bin table for the GUI
-awk 'BEGIN{OFS="\t"; print "contig","bin"} NR>1 && NF>=2 {print $2,$1}' "$REFINED" > "$OUT/contigs_to_bin.tsv"
+awk 'BEGIN{OFS="\t"; print "contig","bin"} NR>1 && NF>=2 {b=$1; sub(/.*\//, "", b); print $2,b}' "$REFINED" > "$OUT/contigs_to_bin.tsv"
 echo "[magscot] $(find "$BINS_DIR" -name '*.fa' | wc -l) refined bins -> $BINS_DIR"
 
 echo "[magscot] done → $OUT"

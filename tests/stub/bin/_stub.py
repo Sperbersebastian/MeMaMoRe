@@ -344,6 +344,9 @@ def snakemake():
             if ":" in line:
                 k, v = line.split(":", 1)
                 conf[k.strip()] = v.strip().strip('"')
+    if os.environ.get("STUB_BINNY_EMPTY") == "1":  # Binny finishing without any bin
+        mkdir(Path(conf["outputdir"]) / "bins")
+        return
     write_bins(conf["assembly"], Path(conf["outputdir"]) / "bins", prefix="binny_")
 
 
@@ -397,7 +400,7 @@ def rscript():
                     bins.setdefault(parts[0], []).append(parts[1])
     rows, stats = ["binnew\tcontig"], ["bin\tcompleteness\tcontamination\tscore\trefined_id"]
     for i, (b, contigs) in enumerate(sorted(bins.items()), 1):
-        rid = f"MAGScoT_cleanbin_{i:06d}"
+        rid = f"{prefix}_cleanbin_{i:06d}"  # real MAGScoT prefixes the full -o path
         rows += [f"{rid}\t{c}" for c in contigs]
         stats.append(f"{b}\t0.92\t0.02\t0.88\t{rid}")
     write(prefix + ".refined.contig_to_bin.out", "\n".join(rows) + "\n")
@@ -475,6 +478,9 @@ def kind_of(cid):
 
 def metaplasmidspades():
     out = mkdir(opt("-o"))
+    if os.environ.get("STUB_NO_CIRCULAR") == "1":  # like a sample without circular plasmids
+        write(out / "spades.log", "No complete extrachromosomal contigs assembled!!\n")
+        return
     name, ln, _, _ = CONTIGS[0]
     write_fasta(out / "contigs.fasta", [(name + "_component_0", seq(name, ln))])
 

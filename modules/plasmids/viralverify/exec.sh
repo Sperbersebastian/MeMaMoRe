@@ -7,7 +7,10 @@ ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 
 IN="$ROOT/SRA/assemblies/metaplasmidspades/$SAMPLE/contigs.fasta"
 OUT="$ROOT/SRA/plasmids/$SAMPLE/viralverify"; mkdir -p "$OUT"
-[[ -s "$IN" ]] || { echo "[vv] no input: $IN"; exit 1; }
+if [[ ! -s "$IN" ]]; then
+  echo "[vv] no metaPlasmidSPAdes contigs for $SAMPLE, skipping viralVerify"
+  exit 0
+fi
 
 VV_HMM="${VV_HMM:-$ROOT/refdata/viralverify/pfam/Pfam-A.hmm}"
 VV_DB="${VV_DB:-}"
