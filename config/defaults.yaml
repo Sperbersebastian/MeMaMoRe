@@ -21,3 +21,9 @@ modules:
     qc:
       breadth_min: 0.8
       depth_min: 2.0
+  plasmids:
+    # union: every candidate of any predictor (default, previous behaviour)
+    # min2 / min3: candidates confirmed by >= 2 / 3 predictors, i.e. covered over
+    # >= consensus_min_overlap of their length by the other tools' candidates
+    consensus: union
+    consensus_min_overlap: 0.5

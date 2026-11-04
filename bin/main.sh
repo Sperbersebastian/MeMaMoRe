@@ -82,19 +82,25 @@ run_sim_wrap(){ export ROOT="$ROOT"; export CFG="${CFG:-$ROOT/config/sim.yaml}"
 
 run_plasmids_wrap(){
   [[ -s "$ROOT/bin/modules/plasmids.sh" ]] || { echo "[err] bin/modules/plasmids.sh not found"; exit 2; }
-  export ROOT MODE RESUME FORCE FROM ONLY SAMPLE
+  local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
+  : > "$m"; merge "$p" "$m"          # config/defaults.yaml + local.yaml + --set
+  export PARAMS_YAML="$p" ROOT MODE RESUME FORCE FROM ONLY SAMPLE
   bash "$ROOT/bin/modules/plasmids.sh"
 }
 
 run_viruses_wrap(){
   [[ -s "$ROOT/bin/modules/viruses.sh" ]] || { echo "[err] bin/modules/viruses.sh not found"; exit 2; }
-  export ROOT MODE RESUME FORCE FROM ONLY SAMPLE
+  local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
+  : > "$m"; merge "$p" "$m"          # config/defaults.yaml + local.yaml + --set
+  export PARAMS_YAML="$p" ROOT MODE RESUME FORCE FROM ONLY SAMPLE
   bash "$ROOT/bin/modules/viruses.sh"
 }
 
 run_args_wrap(){
   [[ -s "$ROOT/bin/modules/args.sh" ]] || { echo "[err] bin/modules/args.sh not found"; exit 2; }
-  export ROOT MODE RESUME FORCE FROM ONLY SAMPLE
+  local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
+  : > "$m"; merge "$p" "$m"          # config/defaults.yaml + local.yaml + --set
+  export PARAMS_YAML="$p" ROOT MODE RESUME FORCE FROM ONLY SAMPLE
   bash "$ROOT/bin/modules/args.sh"
 }
 

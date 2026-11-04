@@ -14,6 +14,22 @@ REP_OUT="$SOUT/plasmids_derep.$SAMPLE.fasta"
 GCONCAT="$GOUT/plasmids_concat.all_samples.fasta"
 
 MIN_LEN="${MIN_LEN:-2000}"
+
+# config (merged PARAMS_YAML from bin/main.sh; defaults when run standalone)
+cfg(){ local v=""; [[ -n "${PARAMS_YAML:-}" && -s "$PARAMS_YAML" ]] && \
+         v="$(micromamba run -n env_sra_tools python "$ROOT/scripts/merge_params.py" --defaults "$PARAMS_YAML" --get "$1" 2>/dev/null || true)"
+       [[ -n "$v" && "$v" != "None" && "$v" != "null" ]] && echo "$v" || echo "$2"; }
+CONSENSUS="$(cfg modules.plasmids.consensus union)"
+MIN_OV="$(cfg modules.plasmids.consensus_min_overlap 0.5)"
+case "$CONSENSUS" in
+  union) MIN_TOOLS=1 ;; min2) MIN_TOOLS=2 ;; min3) MIN_TOOLS=3 ;;
+  *) echo "[union] invalid modules.plasmids.consensus '$CONSENSUS' (union|min2|min3)"; exit 2 ;;
+esac
+STAMP="$UOUT/.consensus"
+# rebuild the candidate set when the consensus rule changed since the last run
+if [[ -s "$RAW" && "$(cat "$STAMP" 2>/dev/null)" != "$CONSENSUS $MIN_OV" ]]; then
+  echo "[union] consensus rule changed -> rebuilding $RAW"; rm -f "$RAW"
+fi
 ID="${ID:-95}"
 COV="${COV:-80}"
 
@@ -60,6 +76,14 @@ if [[ ! -s "$RAW" ]]; then
   ' "$tmp" > "$RAW"
   rm -f "$tmp"
 
+  # consensus: keep candidates confirmed by >= MIN_TOOLS predictors (union = all)
+  if [[ "$MIN_TOOLS" -gt 1 && -s "$RAW" ]]; then
+    mv -f "$RAW" "$UOUT/plasmids_raw.all.fasta"
+    python3 "$ROOT/scripts/plasmid_consensus.py" "$UOUT/plasmids_raw.all.fasta" "$RAW" \
+      "$UOUT/plasmid_support.tsv" "$MIN_TOOLS" "$MIN_OV"
+  fi
+  echo "$CONSENSUS $MIN_OV" > "$STAMP"
+
   if [[ ! -s "$RAW" ]]; then
     # no plasmid candidates from any tool: normal for some samples
     echo "[union] WARNING: no plasmid sequences >= ${MIN_LEN} bp for $SAMPLE; skipping clustering"
@@ -76,6 +100,7 @@ CLSTR="${CLSTR:-$(find "$ROOT/external/Stampede-ClusterGenomes" -type f \( -name
 
 cp -f "$RAW" "$LRAW"
 FLAG="$SOUT/.done.sample.i${ID}.c${COV}"
+[[ -f "$FLAG" && "$RAW" -nt "$FLAG" ]] && rm -f "$FLAG"   # candidate set changed
 [[ "$FORCE" == "1" ]] && rm -f "$FLAG" "$SOUT"/plasmids_raw_*"${ID}"-"${COV}".fna
 
 if [[ ! -f "$FLAG" ]]; then

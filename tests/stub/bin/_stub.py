@@ -728,6 +728,26 @@ def pyrodigal():
     write(opt("-o"), "\n".join(gff) + "\n")
 
 
+
+# ---------------------------------------------------------------- MUMmer (plasmid consensus)
+def nucmer():
+    """nucmer [--maxmatch] [-t N] -p PFX REF QRY -> PFX.delta remembering the inputs."""
+    pos = positional(skip_values_for=("-p", "-t", "--prefix", "--threads"))
+    write(opt("-p", "--prefix") + ".delta", f"{os.path.abspath(pos[0])} {os.path.abspath(pos[1])}\nNUCMER\n")
+
+
+def show_coords():
+    """Full-length 100 % hits between candidates of the same contig (header 'tool|contig')."""
+    delta = positional()[-1]
+    ref = open(delta).readline().split()[0]
+    recs = records(ref)
+    for a, sa in recs:
+        for b, sb in recs:
+            if a != b and a.split("|", 1)[-1] == b.split("|", 1)[-1]:
+                la, lb = len(sa), len(sb)
+                sys.stdout.write(f"1\t{la}\t1\t{lb}\t{la}\t{lb}\t100.00\t{la}\t{lb}\t100.00\t100.00\t{a}\t{b}\n")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -741,6 +761,7 @@ HANDLERS = {
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
+    "nucmer": nucmer, "show-coords": show_coords,
 }
 
 if __name__ == "__main__":
