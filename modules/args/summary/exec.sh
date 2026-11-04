@@ -18,9 +18,11 @@ echo -e "source\tcontext\tgene\tARG_class\tcontig_or_gene\tidentity\tevalue_or_s
 
 count=0
 
-# --- DeepARG (all contexts) ---
+# --- DeepARG ---
+# mapping.ARG columns: #ARG query-start query-end read_id predicted_ARG-class best-hit
+#                      probability identity alignment-length bitscore evalue counts
 DEEPARG_DIR="$ROOT/SRA/args/$SAMPLE/deeparg"
-for ctx_dir in "$DEEPARG_DIR"/contigs "$DEEPARG_DIR"/mags "$DEEPARG_DIR"/plasmids "$DEEPARG_DIR"/viruses; do
+for ctx_dir in "$DEEPARG_DIR"/genes "$DEEPARG_DIR"/contigs "$DEEPARG_DIR"/mags "$DEEPARG_DIR"/plasmids "$DEEPARG_DIR"/viruses; do
   [[ -d "$ctx_dir" ]] || continue
   context=$(basename "$ctx_dir")
   for f in "$ctx_dir"/*.mapping.ARG; do
@@ -28,7 +30,7 @@ for ctx_dir in "$DEEPARG_DIR"/contigs "$DEEPARG_DIR"/mags "$DEEPARG_DIR"/plasmid
     label=$(basename "$f" .mapping.ARG)
     echo "[arg-summary] adding DeepARG/$context/$label"
     tail -n +2 "$f" | awk -F'\t' -v ctx="$context" -v lbl="$label" \
-      'BEGIN{OFS="\t"} {print "deeparg",ctx,$1,$6,$2,$4,$5,"prob="$8";label="lbl}' >> "$SUMMARY"
+      'BEGIN{OFS="\t"} {print "deeparg",ctx,$1,$5,$4,$8,$7,"best_hit="$6";label="lbl}' >> "$SUMMARY"
     ((count++)) || true
   done
 done

@@ -640,7 +640,8 @@ ARG_HITS = [("TEM-1", "beta-lactam", "ARO:3000873"), ("tetA", "tetracycline", "A
 
 def deeparg():
     if ARGS[:1] == ["download_data"]:
-        write(Path(opt("-o")) / "model" / "v2" / "metadata.pkl", "stub\n")
+        for f in ("metadata_LS.pkl", "model_LS.pkl"):
+            write(Path(opt("-o")) / "model" / "v2" / f, "stub\n")
         return
     fa, prefix = opt("-i", "--input-file"), opt("-o", "--output-file")
     ids = read_fasta_ids(fa)
