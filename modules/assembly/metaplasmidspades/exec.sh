@@ -5,9 +5,6 @@ set -euo pipefail
 ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 
 
-# --- trace who invoked me ---
-printf '[mps] invoked by PPID=%s CMD="%s"\n' "$PPID" "$(ps -o command= -p "$PPID" | tail -n1)"
-command -v pstree >/dev/null 2>&1 && { echo "[mps] pstree:"; pstree -salp $$ | sed -n '1,8p'; }
 
 # Only run MPS if explicitly requested:
 #  - ONLY=metaplasmidspades
@@ -19,7 +16,7 @@ fi
 
 
 # collect reads from both layouts, ohne eval/CRLF-Probleme
-# --- collect reads (only from qc/fastp) ---
+# --- collect reads (fastp or host-cleaned, see bin/lib/reads.sh) ---
 shopt -s nullglob
 # shellcheck source=bin/lib/reads.sh
 source "$ROOT/bin/lib/reads.sh"
