@@ -7,7 +7,7 @@ ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 IN="$ROOT/SRA/plasmids/$SAMPLE/cluster/plasmids_derep.$SAMPLE.fasta"
 OUT="$ROOT/SRA/plasmids/$SAMPLE/typer"; mkdir -p "$OUT"
 
-[[ -s "$IN" ]] || { echo "[mob_typer] no input: $IN"; exit 1; }
+[[ -s "$IN" ]] || { echo "[mob_typer] no dereplicated plasmids for $SAMPLE, skipping"; exit 0; }
 command -v mob_typer >/dev/null 2>&1 || { echo "[mob_typer] mob_typer not in PATH"; exit 2; }
 
 # DBs if present

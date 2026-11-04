@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """MeMaMoRe Web GUI – Flask backend."""
-import json, os, re, subprocess, threading, time, glob, csv, signal, shutil
+import json, os, re, subprocess, sys, threading, time, glob, csv, signal, shutil
 from pathlib import Path
 from flask import Flask, render_template, jsonify, request, Response, abort
 
@@ -59,7 +59,8 @@ def _samples():
         d = os.path.join(ROOT, "SRA", sub)
         if os.path.isdir(d):
             for name in os.listdir(d):
-                if os.path.isdir(os.path.join(d, name)) and not name.startswith("."):
+                # skip hidden dirs and internal ones like plasmids/_global
+                if os.path.isdir(os.path.join(d, name)) and not name.startswith((".", "_")):
                     samples.add(name)
     return sorted(samples)
 
@@ -102,13 +103,13 @@ def _module_status(sample):
                     status[mid] = "running"
     return status
 
-def _read_tsv(path, max_rows=5000):
-    """Read a TSV file and return list of dicts."""
+def _read_tsv(path, max_rows=5000, delimiter="\t"):
+    """Read a TSV (or other delimited) file and return list of dicts."""
     rows = []
     if not os.path.isfile(path):
         return rows
     with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
+        reader = csv.DictReader(f, delimiter=delimiter)
         for i, row in enumerate(reader):
             if i >= max_rows:
                 break
@@ -333,8 +334,10 @@ def api_results(sample, module):
         mapping_path = os.path.join(ROOT, "SRA", "assemblies", "contig_qc", sample, "mapping_counts.tsv")
         results["mapping"] = _read_tsv(mapping_path)
     elif module == "args":
-        summary_path = os.path.join(ROOT, "SRA", "args", sample, "summary", "args_summary.tsv")
-        results["summary"] = _read_tsv(summary_path)
+        summary_dir = os.path.join(ROOT, "SRA", "args", sample, "summary")
+        results["summary"] = _read_tsv(os.path.join(summary_dir, "args_summary.tsv"))
+        results["virulence"] = _read_tsv(os.path.join(summary_dir, "virulence_summary.tsv"))
+        results["replicons"] = _read_tsv(os.path.join(summary_dir, "plasmid_replicons.tsv"))
         # Per tool
         for tool in ["deeparg", "rgi", "amrplusplus"]:
             tool_dir = os.path.join(ROOT, "SRA", "args", sample, tool)
@@ -354,6 +357,8 @@ def api_results(sample, module):
         results["checkv"] = _read_tsv(checkv_path)
         genomad_path = os.path.join(ROOT, "SRA", "viruses", sample, "genomad", "contigs_summary", "contigs_virus_summary.tsv")
         results["genomad"] = _read_tsv(genomad_path)
+        # optional iPHoP host prediction (comma-separated)
+        results["iphop"] = _read_tsv(os.path.join(ROOT, "SRA", "viruses", sample, "iphop", "host_genus.csv"), delimiter=",")
     elif module == "plasmids":
         mobrecon_path = os.path.join(ROOT, "SRA", "plasmids", sample, "mobrecon", "mobtyper_results.txt")
         results["mobrecon"] = _read_tsv(mobrecon_path)
@@ -411,6 +416,36 @@ def api_logs_stream(sample):
 
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+SUMMARY_FILES = {
+    "overview": "samples_overview.tsv", "mags": "mags.tsv", "viruses": "viruses.tsv",
+    "args_matrix": "args_matrix.tsv", "virulence_matrix": "virulence_matrix.tsv",
+    "replicons_matrix": "replicons_matrix.tsv",
+}
+
+@app.route("/api/summary")
+def api_summary():
+    """Multi-sample tables written by scripts/summarize_samples.py (bin/main.sh summary)."""
+    d = os.path.join(ROOT, "SRA", "summary")
+    out = {k: _read_tsv(os.path.join(d, f)) for k, f in SUMMARY_FILES.items()}
+    # jsonify sorts object keys, so pass each table's column order separately
+    cols = {}
+    for k, f in SUMMARY_FILES.items():
+        p = os.path.join(d, f)
+        if os.path.isfile(p):
+            with open(p) as fh:
+                cols[k] = fh.readline().rstrip("\n").split("\t")
+    out["columns"] = cols
+    return jsonify(out)
+
+@app.route("/api/summary/refresh", methods=["POST"])
+def api_summary_refresh():
+    """Rebuild SRA/summary/ for all samples in the manifest (standard library only, fast)."""
+    script = os.path.join(ROOT, "scripts", "summarize_samples.py")
+    p = subprocess.run([sys.executable, script, ROOT], capture_output=True, text=True, timeout=300)
+    if p.returncode != 0:
+        return jsonify({"ok": False, "error": (p.stderr or p.stdout)[-2000:]}), 500
+    return jsonify({"ok": True, "message": p.stdout.strip()})
 
 @app.route("/api/samples/<name>", methods=["DELETE"])
 def api_delete_sample(name):

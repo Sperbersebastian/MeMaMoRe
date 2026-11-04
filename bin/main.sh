@@ -36,6 +36,7 @@ Direct helpers:
   bin/main.sh plasmids_env
   bin/main.sh plasmids --sample ID [--cpus N] [--force|--resume]
   bin/main.sh gui [--port 5000] [--host 127.0.0.1]
+  bin/main.sh summary [--samples s1,s2,...]      (multi-sample tables -> SRA/summary/)
 
 Modules:
   ingest, qc, assembly, binning, sim, plasmids, viruses, args, all
@@ -202,6 +203,9 @@ case "$cmd" in
       all)      : "${SAMPLE:?need --sample for plasmids/viruses in all}"; run_all_wrap ;;
       *) usage; exit 2 ;;
     esac
+    ;;
+  summary)
+    run_in_env env_sra_tools python "$ROOT/scripts/summarize_samples.py" "$ROOT" "$@"
     ;;
   gui)
     PORT="5000"

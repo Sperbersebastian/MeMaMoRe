@@ -42,6 +42,7 @@ command -v "$BIN" >/dev/null 2>&1 || { echo "[mps] metaPlasmidSPAdes not in PATH
 # Rerun logic
 if [[ "$FORCE" == "1" ]]; then rm -rf "$OUT"; fi
 if [[ -s "$CTG" ]]; then echo "[mps] cached -> $CTG"; exit 0; fi
+if [[ -f "$OUT/.no_plasmids" ]]; then echo "[mps] cached: no circular plasmids for $SAMPLE"; exit 0; fi
 mkdir -p "$OUT"
 
 # Build command (supports multi-lane; pairs by index)
@@ -58,5 +59,14 @@ fi
 echo "[mps] ${cmd[*]}"
 "${cmd[@]}"
 
-[[ -s "$CTG" ]] || { echo "[mps] assembly failed, contigs not found: $CTG"; exit 5; }
+if [[ ! -s "$CTG" ]]; then
+  # metaplasmidSPAdes only reports circular plasmids; finding none is a normal
+  # outcome (geNomad/PLASMe/MOB-recon still run on the metaSPAdes contigs)
+  if grep -q "No complete extrachromosomal contigs assembled" "$OUT/spades.log" 2>/dev/null; then
+    echo "[mps] WARNING: no circular plasmids assembled for $SAMPLE"
+    date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/.no_plasmids"
+    exit 0
+  fi
+  echo "[mps] assembly failed, contigs not found: $CTG"; exit 5
+fi
 echo "[mps] done -> $CTG"

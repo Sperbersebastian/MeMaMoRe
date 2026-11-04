@@ -85,7 +85,7 @@ for p in "$ROOT/SRA/plasmids/$SAMPLE/cluster/plasmids_derep.$SAMPLE.fasta" \
          "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_union.fasta" \
          "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_concat.fasta" \
          "$ROOT/SRA/plasmids/$SAMPLE/union/"*.fasta; do
-  [[ -s "$p" ]] && { PLASMIDS="$p"; break; }
+  if [[ -s "$p" ]]; then PLASMIDS="$p"; break; fi
 done
 if [[ -n "$PLASMIDS" ]]; then
   _run_deeparg "$PLASMIDS" "plasmids" "plasmids"
@@ -99,7 +99,7 @@ VIRUSES=""
 for v in "$ROOT/SRA/viruses/$SAMPLE/union/viruses_union.fasta" \
          "$ROOT/SRA/viruses/$SAMPLE/union/viruses_concat.fasta" \
          "$ROOT/SRA/viruses/$SAMPLE/union/"*.fasta; do
-  [[ -s "$v" ]] && { VIRUSES="$v"; break; }
+  if [[ -s "$v" ]]; then VIRUSES="$v"; break; fi
 done
 if [[ -n "$VIRUSES" ]]; then
   _run_deeparg "$VIRUSES" "viruses" "viruses"

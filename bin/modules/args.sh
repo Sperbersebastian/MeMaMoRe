@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ARG Detection Module Coordinator (bin/modules/args.sh)
-# Per-sample pipeline: DeepARG → RGI → AMR++ → summary
+# Per-sample pipeline: DeepARG → RGI → AMR++ → ABRicate (VFDB/ResFinder/PlasmidFinder) → summary
 set -euo pipefail
 
 : "${ROOT:?ROOT not set}"
@@ -35,6 +35,7 @@ _run_step(){
     deeparg)       env_name="deeparg_env" ;;
     rgi)           env_name="rgi_env" ;;
     amrplusplus)   env_name="amrplusplus_env" ;;
+    abricate)      env_name="abricate_env" ;;
     summary_args)  env_name="deeparg_env" ;;
     *)             env_name="deeparg_env" ;;
   esac
@@ -52,7 +53,7 @@ exec > >(stdbuf -oL tee -a "$LOGFILE") 2>&1
 echo "[args] START sample=$SAMPLE cpus=$CPUS force=$FORCE host=$(hostname)"
 
 # verify scripts exist
-for s in deeparg rgi amrplusplus summary; do
+for s in deeparg rgi amrplusplus abricate summary; do
   [[ -x "$MOD/$s/exec.sh" ]] || { echo "[error] missing: $MOD/$s/exec.sh"; exit 1; }
 done
 
@@ -64,6 +65,8 @@ _run_step "rgi"           "$MOD/rgi/exec.sh"           "$SAMPLE"
 # 2) AMR++
 _run_step "amrplusplus"   "$MOD/amrplusplus/exec.sh"   "$SAMPLE"
 # 3) Summary
+# 3) ABRicate: virulence (VFDB), ResFinder, PlasmidFinder
+_run_step "abricate"      "$MOD/abricate/exec.sh"      "$SAMPLE"
 _run_step "summary_args"  "$MOD/summary/exec.sh"       "$SAMPLE"
 
 echo "[args] DONE sample=$SAMPLE"

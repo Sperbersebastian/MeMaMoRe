@@ -217,6 +217,11 @@ def samtools():
         with open(fa + ".fai", "w") as fo:
             for cid, ln in fasta_lengths(fa).items():
                 fo.write(f"{cid}\t{ln}\t0\t80\t81\n")
+    elif sub == "coverage":
+        ref = bam_ref(positional()[-1])
+        print("#rname\tstartpos\tendpos\tnumreads\tcovbases\tcoverage\tmeandepth\tmeanbaseq\tmeanmapq")
+        for cid, ln in fasta_lengths(ref).items():
+            print(f"{cid}\t1\t{ln}\t{max(1, int(ln * contig_info(cid)[1] / 150))}\t{ln}\t100\t5.0\t36\t60")
     elif sub in ("flagstat", "stats"):
         print("1000 + 0 in total (QC-passed reads + QC-failed reads)")
     else:
@@ -344,6 +349,9 @@ def snakemake():
             if ":" in line:
                 k, v = line.split(":", 1)
                 conf[k.strip()] = v.strip().strip('"')
+    if os.environ.get("STUB_BINNY_EMPTY") == "1":  # Binny finishing without any bin
+        mkdir(Path(conf["outputdir"]) / "bins")
+        return
     write_bins(conf["assembly"], Path(conf["outputdir"]) / "bins", prefix="binny_")
 
 
@@ -395,9 +403,21 @@ def rscript():
                 parts = line.rstrip("\n").split("\t")
                 if len(parts) >= 2:
                     bins.setdefault(parts[0], []).append(parts[1])
+    sets = set()
+    with open(inp) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) >= 3:
+                sets.add(parts[2])
+    if len(sets) < 2:  # like MAGScoT: one binning tool -> "Scoring bins only", no refined table
+        hdr = "bin\tset\tuniqueSCGs\tmultipleSCGs\tsumSCGs\tn_markers\tn_contigs\tCompleteness\t" \
+              "additionalSCGs\tContamination\tMultiContam\tContamination_Score\tscore\tbintool"
+        write(prefix + ".scores.out", "\n".join([hdr] + [f"{b}\tgtdb_rel207_bac120\t100\t2\t102\t120\t{len(c)}\t0.92\t2\t0.02\t0\t0.02\t0.91\tx"
+                                                       for b, c in sorted(bins.items())]) + "\n")
+        return
     rows, stats = ["binnew\tcontig"], ["bin\tcompleteness\tcontamination\tscore\trefined_id"]
     for i, (b, contigs) in enumerate(sorted(bins.items()), 1):
-        rid = f"MAGScoT_cleanbin_{i:06d}"
+        rid = f"{prefix}_cleanbin_{i:06d}"  # real MAGScoT prefixes the full -o path
         rows += [f"{rid}\t{c}" for c in contigs]
         stats.append(f"{b}\t0.92\t0.02\t0.88\t{rid}")
     write(prefix + ".refined.contig_to_bin.out", "\n".join(rows) + "\n")
@@ -475,6 +495,9 @@ def kind_of(cid):
 
 def metaplasmidspades():
     out = mkdir(opt("-o"))
+    if os.environ.get("STUB_NO_CIRCULAR") == "1":  # like a sample without circular plasmids
+        write(out / "spades.log", "No complete extrachromosomal contigs assembled!!\n")
+        return
     name, ln, _, _ = CONTIGS[0]
     write_fasta(out / "contigs.fasta", [(name + "_component_0", seq(name, ln))])
 
@@ -654,6 +677,35 @@ def rgi():
     write(prefix + ".json", "{}\n")
 
 
+
+def abricate():
+    db = opt("--db", default="ncbi")
+    fa = positional(skip_values_for=("--db", "--minid", "--mincov", "--threads"))[-1]
+    hits = {"vfdb": [("cagA", "cytotoxin-associated gene A (VF0386)", "")],
+            "resfinder": [("blaCTX-M-15", "", "Cephalosporin")],
+            "plasmidfinder": [("IncFII", "", "")]}.get(db, [])
+    rows = ["#FILE\tSEQUENCE\tSTART\tEND\tSTRAND\tGENE\tCOVERAGE\tCOVERAGE_MAP\tGAPS\t%COVERAGE\t"
+            "%IDENTITY\tDATABASE\tACCESSION\tPRODUCT\tRESISTANCE"]
+    for (gene, product, res), cid in zip(hits, read_fasta_ids(fa)):
+        rows.append(f"{os.path.basename(fa)}\t{cid}\t100\t976\t+\t{gene}\t1-876/876\t===============\t0/0\t"
+                    f"100.00\t99.89\t{db}\tACC_{gene}\t{product}\t{res}")
+    sys.stdout.write("\n".join(rows) + "\n")
+
+
+
+def iphop():
+    if ARGS[:1] != ["predict"]:
+        log(f"unhandled iphop {ARGS[:1]}; no-op")
+        return
+    out = mkdir(opt("--out_dir"))
+    rows = ["Virus,AAI to closest RefSeq,Host genus,Confidence score,List of methods"]
+    for cid in read_fasta_ids(opt("--fa_file")):
+        rows.append(f"{cid},95.1,d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales;"
+                    f"f__Enterobacteriaceae;g__Escherichia,94.3,blast;CRISPR")
+    write(out / "Host_prediction_to_genus_m90.csv", "\n".join(rows) + "\n")
+    write(out / "Host_prediction_to_genome_m90.csv", rows[0] + "\n")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -666,10 +718,14 @@ HANDLERS = {
     "metaplasmidspades.py": metaplasmidspades, "metaviralspades.py": metaviralspades,
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
-    "bwa": bwa, "deeparg": deeparg, "rgi": rgi,
+    "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop,
 }
 
 if __name__ == "__main__":
+    # STUB_FAIL=tool1,tool2 makes those tools crash, to test the pipeline's error paths
+    if TOOL in os.environ.get("STUB_FAIL", "").split(","):
+        log("simulated crash (STUB_FAIL)")
+        sys.exit(1)
     if TOOL not in HANDLERS:
         log(f"no stub for '{TOOL}'")
         sys.exit(127)

@@ -49,13 +49,20 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install flask pyyaml
-      - run: sudo apt-get install -y --no-install-recommends gawk
+      - name: gawk + a comma-decimal locale (stub runs use de_DE to catch number parsing bugs)
+        run: |
+          sudo apt-get install -y --no-install-recommends gawk locales
+          sudo locale-gen de_DE.UTF-8
       - name: stub run (ingest -> qc -> assembly -> binning -> plasmids -> viruses -> args)
         run: STUB_WORK="$RUNNER_TEMP/stub" tests/stub/run.sh
       - name: re-run resumes without errors
         run: STUB_WORK="$RUNNER_TEMP/stub" tests/stub/run.sh
       - name: GUI shows results for every module
         run: python tests/stub/check_gui.py "$RUNNER_TEMP/stub"
+      - name: optional steps may fail or find nothing (COMEBin crash, no Binny bins, no circular plasmids)
+        run: |
+          STUB_FAIL=run_comebin.sh STUB_BINNY_EMPTY=1 STUB_NO_CIRCULAR=1 STUB_WORK="$RUNNER_TEMP/stub_fail" tests/stub/run.sh
+          ls "$RUNNER_TEMP"/stub_fail/SRA/binning/magscot/stub/bins/*.fa
       - name: upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
