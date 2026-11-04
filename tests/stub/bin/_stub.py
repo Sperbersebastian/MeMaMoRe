@@ -671,7 +671,8 @@ def rgi():
            "CARD_Protein_Sequence\tPercentage Length of Reference Sequence\tID\tModel_ID\tNudged\tNote")
     rows = [hdr]
     for (gene, cls, aro), cid in zip(ARG_HITS, ids):
-        rows.append(f"{cid}_1 # 1 # 861 # 1\t{cid}\t1\t861\t+\tStrict\t500\t560.0\t{gene}\t98.5\t"
+        orf = f"{cid} # 1 # 861 # 1 # ID=1" if opt("-t") == "protein" else f"{cid}_1 # 1 # 861 # 1"
+        rows.append(f"{orf}\t{'' if opt('-t') == 'protein' else cid}\t1\t861\t+\tStrict\t500\t560.0\t{gene}\t98.5\t"
                     f"{aro.split(':')[1]}\tprotein homolog model\tn/a\tn/a\t{cls} antibiotic\t"
                     f"antibiotic inactivation\tstub family\t\t\t\t100.0\tgnl|BL_ORD_ID|1\t1\t\t")
     write(prefix + ".txt", "\n".join(rows) + "\n")

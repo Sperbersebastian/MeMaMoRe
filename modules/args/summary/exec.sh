@@ -22,7 +22,10 @@ count=0
 # mapping.ARG columns: #ARG query-start query-end read_id predicted_ARG-class best-hit
 #                      probability identity alignment-length bitscore evalue counts
 DEEPARG_DIR="$ROOT/SRA/args/$SAMPLE/deeparg"
-for ctx_dir in "$DEEPARG_DIR"/genes "$DEEPARG_DIR"/contigs "$DEEPARG_DIR"/mags "$DEEPARG_DIR"/plasmids "$DEEPARG_DIR"/viruses; do
+# gene-based run (current) or, for results of older versions, the per-context dirs
+DEEPARG_CTX=("$DEEPARG_DIR"/contigs "$DEEPARG_DIR"/mags "$DEEPARG_DIR"/plasmids "$DEEPARG_DIR"/viruses)
+[[ -d "$DEEPARG_DIR/genes" ]] && DEEPARG_CTX=("$DEEPARG_DIR/genes")
+for ctx_dir in "${DEEPARG_CTX[@]}"; do
   [[ -d "$ctx_dir" ]] || continue
   context=$(basename "$ctx_dir")
   for f in "$ctx_dir"/*.mapping.ARG; do
@@ -37,7 +40,9 @@ done
 
 # --- RGI (all contexts) ---
 RGI_DIR="$ROOT/SRA/args/$SAMPLE/rgi"
-for ctx_dir in "$RGI_DIR"/genes "$RGI_DIR"/contigs "$RGI_DIR"/mags "$RGI_DIR"/plasmids "$RGI_DIR"/viruses; do
+RGI_CTX=("$RGI_DIR"/contigs "$RGI_DIR"/mags "$RGI_DIR"/plasmids "$RGI_DIR"/viruses)
+[[ -d "$RGI_DIR/genes" ]] && RGI_CTX=("$RGI_DIR/genes")
+for ctx_dir in "${RGI_CTX[@]}"; do
   [[ -d "$ctx_dir" ]] || continue
   context=$(basename "$ctx_dir")
   for f in "$ctx_dir"/*.txt; do
@@ -46,7 +51,7 @@ for ctx_dir in "$RGI_DIR"/genes "$RGI_DIR"/contigs "$RGI_DIR"/mags "$RGI_DIR"/pl
     echo "[arg-summary] adding RGI/$context/$label"
     tail -n +2 "$f" | awk -F'\t' -v ctx="$context" -v lbl="$label" \
       -v loose="${RGI_INCLUDE_LOOSE:-0}" \
-      'BEGIN{OFS="\t"} (loose=="1" || $6!="Loose") {print "rgi",ctx,$9,$15,$1,$10,$11,"cutoff="$6";model="$12";label="lbl}' >> "$SUMMARY"
+      'BEGIN{OFS="\t"} (loose=="1" || $6!="Loose") {split($1, id, " "); print "rgi",ctx,$9,$15,id[1],$10,$11,"cutoff="$6";model="$12";label="lbl}' >> "$SUMMARY"
     ((count++)) || true
   done
 done
@@ -67,7 +72,7 @@ VIR="$OUT/virulence_summary.tsv"
 REP="$OUT/plasmid_replicons.tsv"
 echo -e "context\tlabel\tgene\tproduct\tcontig\tidentity\tcoverage\taccession" > "$VIR"
 echo -e "context\tlabel\treplicon\tcontig\tidentity\tcoverage\taccession" > "$REP"
-for f in "$ABR_DIR"/*/*/*.tsv; do
+for f in "$ABR_DIR"/*/contigs/*.tsv; do   # one scan of all contigs; context derived below
   [[ -s "$f" ]] || continue
   db=$(basename "$(dirname "$(dirname "$f")")"); context=$(basename "$(dirname "$f")"); label=$(basename "$f" .tsv)
   case "$db" in
@@ -88,6 +93,9 @@ echo "[arg-summary] virulence genes: $(tail -n +2 "$VIR" | wc -l) -> $VIR"
 echo "[arg-summary] plasmid replicons: $(tail -n +2 "$REP" | wc -l) -> $REP"
 
 [[ $count -gt 0 ]] || echo "[arg-summary] WARNING: no ARG results from any tool"
+
+# gene-centric context table; also derives the context column of the tables above
+python3 "$ROOT/scripts/arg_context.py" "$ROOT" "$SAMPLE"
 
 TOTAL=$(tail -n +2 "$SUMMARY" | wc -l)
 echo "[arg-summary] unified table: $TOTAL entries from $count sources"

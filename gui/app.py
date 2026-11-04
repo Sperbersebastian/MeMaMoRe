@@ -338,6 +338,7 @@ def api_results(sample, module):
         results["summary"] = _read_tsv(os.path.join(summary_dir, "args_summary.tsv"))
         results["virulence"] = _read_tsv(os.path.join(summary_dir, "virulence_summary.tsv"))
         results["replicons"] = _read_tsv(os.path.join(summary_dir, "plasmid_replicons.tsv"))
+        results["arg_context"] = _read_tsv(os.path.join(summary_dir, "arg_context.tsv"))
         # Per tool
         for tool in ["deeparg", "rgi", "amrplusplus"]:
             tool_dir = os.path.join(ROOT, "SRA", "args", sample, tool)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # modules/args/abricate/exec.sh
-# ABRicate screens with its bundled databases on contigs, MAGs, plasmids, viruses:
+# ABRicate screens all contigs once with its bundled databases:
 #   vfdb          virulence factors      -> summary/virulence_summary.tsv
 #   resfinder     acquired ARGs          -> summary/args_summary.tsv (source abricate:resfinder)
 #   plasmidfinder plasmid replicons      -> summary/plasmid_replicons.tsv
@@ -38,30 +38,13 @@ _run_abricate() {
 
 total=0
 
-# ---- 1) all contigs ----
+# ---- all contigs (context assigned later from the contig ID) ----
 CONTIGS="$ROOT/SRA/assemblies/spades/$SAMPLE/contigs.fasta"
 if [[ -s "$CONTIGS" ]]; then
   _run_abricate "$CONTIGS" "contigs" "contigs"; ((total++)) || true
 fi
 
-# ---- 2) MAGs: refined MAGScoT bins if present, else raw MetaBAT2 bins ----
-shopt -s nullglob
-MAG_BINS=( "$ROOT/SRA/binning/magscot/$SAMPLE/bins"/*.fa )
-[[ ${#MAG_BINS[@]} -gt 0 ]] || MAG_BINS=( "$ROOT/SRA/binning/metabat2/$SAMPLE"/bin.*.fa )
-shopt -u nullglob
-for bin in "${MAG_BINS[@]}"; do
-  _run_abricate "$bin" "mags" "$(basename "$bin" .fa)"; ((total++)) || true
-done
-
-# ---- 3) plasmids (dereplicated set first) ----
-for p in "$ROOT/SRA/plasmids/$SAMPLE/cluster/plasmids_derep.$SAMPLE.fasta" \
-         "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_raw.fasta"; do
-  if [[ -s "$p" ]]; then _run_abricate "$p" "plasmids" "plasmids"; ((total++)) || true; break; fi
-done
-
-# ---- 4) viruses ----
-V="$ROOT/SRA/viruses/$SAMPLE/union/viruses_union.fasta"
-if [[ -s "$V" ]]; then _run_abricate "$V" "viruses" "viruses"; ((total++)) || true; fi
+# MAG / plasmid / virus context is assigned from the contig ID (scripts/arg_context.py)
 
 echo "[abricate] scanned $total input(s) with: $DBS"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"

@@ -33,7 +33,7 @@ expect = {
     "binning": ["magscot", "checkm2"],
     "plasmids": ["mobrecon", "genomad"],
     "viruses": ["checkv", "genomad", "iphop"],
-    "args": ["summary", "virulence", "replicons"],
+    "args": ["summary", "virulence", "replicons", "arg_context"],
 }
 for mod, keys in expect.items():
     r = c.get(f"/api/results/{sample}/{mod}")

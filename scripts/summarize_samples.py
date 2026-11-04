@@ -188,6 +188,12 @@ def main():
                     arg_m[key][s] = arg_m[key].get(s, 0) + 1
             row["arg_hits"] = len(args)
             row["arg_genes"] = len(genes)
+        ctx = read_tsv(os.path.join(summ, "arg_context.tsv"))
+        if ctx:
+            row["arg_genes_ctx"] = len(ctx)
+            row["arg_genes_plasmid"] = sum(1 for r in ctx if r.get("plasmid_cluster") or r.get("plasmid_tools"))
+            row["arg_genes_mag"] = sum(1 for r in ctx if r.get("mag"))
+            row["arg_genes_virus"] = sum(1 for r in ctx if r.get("virus_id"))
         vir = read_tsv(os.path.join(summ, "virulence_summary.tsv"))
         if vir:
             for r in vir:
@@ -200,7 +206,8 @@ def main():
 
     cols = ["sample", "reads_raw", "reads_qc", "q30_qc", "contigs", "contigs_ge1kb", "assembly_bp",
             "n50", "longest", "mags", "mags_high", "mags_medium", "plasmids_derep", "viruses",
-            "viruses_complete_hq", "arg_hits", "arg_genes", "virulence_genes"]
+            "viruses_complete_hq", "arg_hits", "arg_genes", "arg_genes_ctx", "arg_genes_plasmid",
+            "arg_genes_mag", "arg_genes_virus", "virulence_genes"]
     write_tsv(os.path.join(out, "samples_overview.tsv"), cols, [[r.get(c, "") for c in cols] for r in overview])
     write_tsv(os.path.join(out, "mags.tsv"),
               ["sample", "bin", "contigs", "size_bp", "n50", "completeness", "contamination", "quality", "gtdb_classification"],
