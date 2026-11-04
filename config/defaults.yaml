@@ -10,6 +10,10 @@ modules:
     test_fraction: 0.10
     test_seed: 42
   qc:
+    # host read removal after fastp with Hostile: none (default) | human
+    # (human = index human-t2t-hla, T2T-CHM13v2.0 + HLA; fetched into refdata/hostile)
+    host_removal: none
+    host_index: human-t2t-hla
     fastp:
       length_required: 50
       qualified_quality_phred: 15

@@ -768,6 +768,23 @@ def gunc():
     write(out / "GUNC.progenomes_2.1.maxCSS_level.tsv", "\n".join(rows) + "\n")
 
 
+
+def hostile():
+    """hostile clean --fastq1 A [--fastq2 B] -o DIR: copy reads, drop none; JSON report on stdout."""
+    if ARGS[:1] != ["clean"]:
+        return
+    out = mkdir(opt("-o", "--output"))
+    n = 0
+    for flag, mate in (("--fastq1", 1), ("--fastq2", 2)):
+        src = opt(flag)
+        if src:
+            base = os.path.basename(src).split(".fastq")[0]
+            copy_reads(src, out / f"{base}.clean_{mate}.fastq.gz")
+            n += count_reads(src)
+    sys.stdout.write(json.dumps([{"reads_in": n, "reads_out": n, "reads_removed": 0,
+                                  "reads_removed_proportion": 0.0}]) + "\n")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -781,7 +798,7 @@ HANDLERS = {
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
-    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc,
+    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile,
 }
 
 if __name__ == "__main__":

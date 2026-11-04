@@ -41,7 +41,8 @@ source "$ROOT/bin/lib/env.sh"
 # ---------- helpers ----------
 _have_reads(){
   compgen -G "$ROOT/SRA/qc/fastp/$1/*_R1*.fastq.gz" >/dev/null || \
-  compgen -G "$ROOT/SRA/qc/fastp/$1/*trimmed_1*.fastq.gz" >/dev/null
+  compgen -G "$ROOT/SRA/qc/fastp/$1/*trimmed_1*.fastq.gz" >/dev/null || \
+  compgen -G "$ROOT/SRA/qc/hostile/$1/*_clean_1.fastq.gz" >/dev/null
 }
 
 

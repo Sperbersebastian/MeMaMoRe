@@ -42,8 +42,12 @@ if [[ "${MODE:-full}" == "test" ]]; then
   fi
   [[ -s "$IN1" ]] || { IN1="$R1"; IN2="${R2:-}"; }
 else
-  T1="$ROOT/SRA/qc/fastp/$SAMPLE/${SAMPLE}_trimmed_1.fastq.gz"
-  T2="$ROOT/SRA/qc/fastp/$SAMPLE/${SAMPLE}_trimmed_2.fastq.gz"
+  # fastp output, or host-cleaned reads when modules.qc.host_removal = human
+  # shellcheck source=bin/lib/reads.sh
+  source "$ROOT/bin/lib/reads.sh"
+  _rr="$(qc_reads "$SAMPLE")" || exit 2   # never fall back to unfiltered reads silently
+  IFS=$'\t' read -r T1 T2 <<<"$_rr"
+  T2="${T2:-/nonexistent}"
   if [[ -s "$T1" ]]; then
     IN1="$T1"; IN2=""; [[ -s "$T2" ]] && IN2="$T2"
   else

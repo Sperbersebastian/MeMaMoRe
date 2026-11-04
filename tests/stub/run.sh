@@ -14,6 +14,9 @@ STUB="$REPO/tests/stub"
 WORK="${STUB_WORK:-$(mktemp -d -t memamo_stub.XXXXXX)}"
 SAMPLE="${STUB_SAMPLE:-stub}"
 MODULES=("$@"); [[ ${#MODULES[@]} -gt 0 ]] || MODULES=(ingest qc assembly binning plasmids viruses args)
+# extra config for every module, e.g. STUB_SET="modules.qc.host_removal=human modules.plasmids.consensus=min2"
+SETS=(--set global.threads="${CPUS:-2}")
+for kv in ${STUB_SET:-}; do SETS+=(--set "$kv"); done
 
 mkdir -p "$WORK"
 for d in bin modules envs config scripts gui; do ln -sfn "$REPO/$d" "$WORK/$d"; done
@@ -77,7 +80,7 @@ for m in "${MODULES[@]}"; do
   echo "[stub] ===== $m ====="
   case "$m" in
     ingest) "$WORK/bin/main.sh" run ingest --fastq "$WORK/input/manifest.tsv" ;;
-    *)      "$WORK/bin/main.sh" run "$m" --sample "$SAMPLE" --set global.threads="$CPUS" ;;
+    *)      "$WORK/bin/main.sh" run "$m" --sample "$SAMPLE" "${SETS[@]}" ;;
   esac
 done
 echo "[stub] ===== summary ====="

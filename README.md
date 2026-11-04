@@ -117,6 +117,14 @@ Missing environments are also created on first use. Reference databases live in
 ~300 GB disk (plus ~340 GB for the optional iPHoP DB), and ≥64 GB RAM for
 GTDB-Tk (skipped with a message on smaller machines, `GTDBTK_FORCE=1` overrides).
 
+### Optional steps
+
+| Key | Default | Effect |
+| --- | --- | --- |
+| `modules.qc.host_removal` | `none` | `human`: Hostile removes reads of the human genome (T2T-CHM13v2.0 + HLA, Bowtie2 index ~4 GB in `refdata/hostile`) after fastp; every downstream step then uses `SRA/qc/hostile/<sample>/` |
+| `modules.binning.gunc` | `true` | GUNC chimerism check of the refined MAGs (ProGenomes 2.1 DB ~13 GB in `refdata/gunc`); chimeric MAGs are tier `low` in `mags.tsv` |
+| `modules.plasmids.consensus` | `union` | `min2` / `min3`: plasmid candidates must be confirmed by 2 / 3 predictors (overlap `consensus_min_overlap`, 0.5) |
+
 ### Length cut-offs
 
 All minimum lengths are read from `config/defaults.yaml` (override in `config/local.yaml`

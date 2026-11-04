@@ -12,6 +12,8 @@ YAML
 }
 
 run_qc(){
+  # shellcheck source=bin/lib/cfg.sh
+  source "$ROOT/bin/lib/cfg.sh"
   local MANI="$ROOT/SRA/reads/manifest.tsv"
   [[ -s "$MANI" ]] || { echo "Missing $MANI. Run ingest first."; exit 2; }
 
@@ -41,6 +43,15 @@ run_qc(){
     T1="$ROOT/SRA/qc/fastp/$SID/${SID}_trimmed_1.fastq.gz"
     T2=""
     [[ -n "${IN2:-}" ]] && T2="$ROOT/SRA/qc/fastp/$SID/${SID}_trimmed_2.fastq.gz"
+
+    # optional host read removal (modules.qc.host_removal: none | human)
+    case "$(cfg modules.qc.host_removal none)" in
+      none) ;;
+      human)
+        ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" IN1="$T1" IN2="${T2:-}" FORCE="${FORCE:-0}" \
+          bash "$ROOT/modules/qc/hostile/exec.sh" ;;
+      *) echo "[qc] invalid modules.qc.host_removal (none|human)"; exit 2 ;;
+    esac
 
     ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" IN1="$T1" IN2="${T2:-}" \
       bash "$ROOT/modules/qc/fastqc/exec.sh"

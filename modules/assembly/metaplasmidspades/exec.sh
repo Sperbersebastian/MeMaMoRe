@@ -21,8 +21,14 @@ fi
 # collect reads from both layouts, ohne eval/CRLF-Probleme
 # --- collect reads (only from qc/fastp) ---
 shopt -s nullglob
-R1=( "$ROOT/SRA/qc/fastp/$SAMPLE/"*trimmed_1*.fastq.gz )
-R2=( "$ROOT/SRA/qc/fastp/$SAMPLE/"*trimmed_2*.fastq.gz )
+# shellcheck source=bin/lib/reads.sh
+source "$ROOT/bin/lib/reads.sh"
+# fastp output, or host-cleaned reads when modules.qc.host_removal = human
+_rr="$(qc_reads "$SAMPLE")" || exit 2
+IFS=$'\t' read -r _r1 _r2 <<<"$_rr"
+R1=(); R2=()
+[[ -s "$_r1" ]] && R1=( "$_r1" )
+[[ -n "$_r2" && -s "$_r2" ]] && R2=( "$_r2" )
 
 shopt -u nullglob
 
