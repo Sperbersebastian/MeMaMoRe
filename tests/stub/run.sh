@@ -22,6 +22,8 @@ export STUB_PYTHON="${STUB_PYTHON:-$(command -v python3)}"
 export MAMBA_ROOT_PREFIX="$STUB"          # main.sh/env.sh prepend $MAMBA_ROOT_PREFIX/bin
 export PATH="$STUB/bin:/usr/local/bin:/usr/bin:/bin"
 export MEMAMO_STUB=1 CPUS="${CPUS:-2}" GTDBTK_FORCE=1   # stub: exercise GTDB-Tk regardless of RAM
+# comma-decimal locale (if installed) so CI catches awk/sort number parsing bugs
+locale -a 2>/dev/null | grep -qi '^de_DE.utf' && export LC_ALL='' LANG=de_DE.UTF-8 LC_NUMERIC=de_DE.UTF-8
 unset ROOT GTDBTK_DATA_PATH REFDATA_BASE VIBRANT_DB
 
 # --- placeholder external tools / reference data (only what scripts test for) ---

@@ -33,6 +33,11 @@ export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
 command -v micromamba >/dev/null 2>&1 || { echo "[env] micromamba not found at $MAMBA_ROOT_PREFIX/bin"; exit 127; }
 eval "$(micromamba shell hook --shell=bash)"
 
+# ---------- numbers with a decimal point everywhere ----------
+# Under e.g. de_DE, awk/sort/printf read "0.99" as 0 (comma decimals), which
+# silently breaks score/coverage filters in the module scripts.
+export LC_NUMERIC=C
+
 # ---------- glibc >= 2.41 vs. TensorFlow (geNomad, CheckM2) ----------
 # Newer glibc refuses libraries that request an executable stack, so
 # "import tensorflow" fails with "cannot enable executable stack". This

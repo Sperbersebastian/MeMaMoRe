@@ -403,6 +403,18 @@ def rscript():
                 parts = line.rstrip("\n").split("\t")
                 if len(parts) >= 2:
                     bins.setdefault(parts[0], []).append(parts[1])
+    sets = set()
+    with open(inp) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) >= 3:
+                sets.add(parts[2])
+    if len(sets) < 2:  # like MAGScoT: one binning tool -> "Scoring bins only", no refined table
+        hdr = "bin\tset\tuniqueSCGs\tmultipleSCGs\tsumSCGs\tn_markers\tn_contigs\tCompleteness\t" \
+              "additionalSCGs\tContamination\tMultiContam\tContamination_Score\tscore\tbintool"
+        write(prefix + ".scores.out", "\n".join([hdr] + [f"{b}\tgtdb_rel207_bac120\t100\t2\t102\t120\t{len(c)}\t0.92\t2\t0.02\t0\t0.02\t0.91\tx"
+                                                       for b, c in sorted(bins.items())]) + "\n")
+        return
     rows, stats = ["binnew\tcontig"], ["bin\tcompleteness\tcontamination\tscore\trefined_id"]
     for i, (b, contigs) in enumerate(sorted(bins.items()), 1):
         rid = f"{prefix}_cleanbin_{i:06d}"  # real MAGScoT prefixes the full -o path

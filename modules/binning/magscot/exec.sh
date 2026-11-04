@@ -149,6 +149,24 @@ if [[ ! -s "$REFINED" ]]; then
 else
   echo "[magscot] skip Rscript, results exist: $REFINED"
 fi
+# With bins from a single binning tool MAGScoT only scores them ("Scoring bins
+# only") and writes no refined table: keep that tool's bins whose MAGScoT
+# score passes the same threshold as refinement (MAGSCOT_MIN_SCORE, 0.5).
+SCORES="$OUT/MAGScoT.scores.out"
+if [[ ! -s "$REFINED" && -s "$SCORES" ]]; then
+  awk -F'\t' -v min="${MAGSCOT_MIN_SCORE:-0.5}" '
+    FNR==NR { if (FNR==1) { for (i=1;i<=NF;i++) if ($i=="score") sc=i; next }
+              if (sc && $sc+0 >= min) keep[$1]=1; next }
+    FNR==1  { print "binnew\tcontig" }
+    ($1 in keep) { b=$1; gsub(/[|\/]/, "_", b); print b "\t" $2 }
+  ' "$SCORES" "$RAW_NORM" > "$REFINED.tmp"
+  if [[ $(wc -l < "$REFINED.tmp") -gt 1 ]]; then
+    mv -f "$REFINED.tmp" "$REFINED"
+    echo "[magscot] single binning tool: kept bins with score >= ${MAGSCOT_MIN_SCORE:-0.5} as refined set"
+  else
+    rm -f "$REFINED.tmp"
+  fi
+fi
 [[ -s "$REFINED" ]] || { echo "[magscot] no refined bins ($REFINED missing)"; exit 0; }
 
 # ---------- refined bins -> bins/<bin>.fa (input for CheckM2, barrnap/tRNAscan, GTDB-Tk) ----------
