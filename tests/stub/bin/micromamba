@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Stub micromamba for MEMAMO stub runs: every env "exists", `run` executes
+# the command directly (the fake tools live next to this file on PATH).
+case "${1:-}" in
+  shell)  exit 0 ;;                                   # shell hook: nothing to eval
+  env)
+    case "${2:-}" in
+      list)
+        printf 'Name Active Path\n---- ------ ----\n'
+        for e in base env_ingest env_qc_core env_qc_mqc env_assembly_core env_mapping_coverm \
+                 env_binning env_sra_tools sim_env comebin_env gui_env plasmids_core genomad_env \
+                 plasme_env viralverify_env mobsuite_env hotspot_env stampede_env virsorter2_env \
+                 vibrant_env checkv_env deeparg_env rgi_env amrplusplus_env; do
+          printf '%s\t\t%s\n' "$e" "/stub/envs/$e"
+        done ;;
+    esac
+    exit 0 ;;
+  run)
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -n|--name|-p|--prefix) shift 2 ;;
+        -a|--attach) shift 2 ;;
+        --*) shift ;;
+        *) break ;;
+      esac
+    done
+    exec "$@" ;;
+  *) exit 0 ;;                                        # create/install/remove/config: no-op
+esac

@@ -28,7 +28,7 @@ run_binning(){
   local MANIFEST="$ROOT/SRA/reads/manifest.tsv"
   [[ -s "$MANIFEST" ]] || { echo "[binning] Missing $MANIFEST (run ingest)"; exit 2; }
 
-  : "${GTDBTK_DATA_PATH:=/media/Box/MeMaMoRe/refdata/gtdbtk/release226}"
+  : "${GTDBTK_DATA_PATH:=$ROOT/refdata/gtdbtk/release226}"
   [[ -d "$GTDBTK_DATA_PATH" ]] || { echo "[binning] GTDBTK_DATA_PATH invalid: $GTDBTK_DATA_PATH"; exit 2; }
 
   # threads from merged params helper (prefer python helper; fallback 8)

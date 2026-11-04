@@ -19,8 +19,8 @@ DONE="$OUT/.done"
 command -v VIBRANT_run.py >/dev/null 2>&1 || { echo "[vibrant] VIBRANT_run.py not in PATH"; exit 3; }
 
 # VIBRANT requires its HMM database to be setup before first run.
-# The databases live on the Box drive (symlinked from the conda env's share dir).
-VIBRANT_DB="/media/Box/MeMaMoRe/refdata/vibrant/db"
+# Override with VIBRANT_DB; defaults to the project refdata dir.
+VIBRANT_DB="${VIBRANT_DB:-$ROOT/refdata/vibrant/db}"
 export VIBRANT_DATA_PATH="$VIBRANT_DB"
 if [[ ! -s "$VIBRANT_DB/databases/Pfam-A_v32.HMM.h3i" ]]; then
   echo "[vibrant] DB missing or incomplete -> downloading and setting up"

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Real gawk is needed (PLASMe filter uses gawk-only features). Use the system
+# one, else any copy from a local micromamba env.
+for g in /usr/bin/gawk /usr/local/bin/gawk "$HOME"/micromamba/envs/*/bin/gawk; do
+  [[ -x "$g" ]] && exec "$g" "$@"
+done
+echo "[stub] gawk not found; install it (e.g. apt install gawk)" >&2
+exit 127

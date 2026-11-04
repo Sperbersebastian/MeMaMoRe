@@ -50,7 +50,7 @@ if ! micromamba run -n env_binning gtdbtk check_install >/dev/null; then
   echo "[gtdbtk] ERROR: gtdbtk check_install failed for: $GTDBTK_DATA_PATH"
   echo "[gtdbtk] Hints:"
   echo "  - Pfad muss auf den *Release*-Ordner zeigen, der 'markers/', 'pplacer/', 'taxonomy/' etc. enthält."
-  echo "  - Beispiel: /media/Box/MeMaMoRe/refdata/gtdbtk/release226/"
+  echo "  - Beispiel: $ROOT/refdata/gtdbtk/release226/"
   echo "  - Inhalt:"
   ls -1 "$GTDBTK_DATA_PATH" || true
   exit 1
