@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # modules/args/rgi/exec.sh
-# Run RGI (CARD) on multiple genomic contexts: contigs, MAGs, plasmids, viruses
+# Run RGI (CARD, protein mode) once on the central gene calls (genes.faa)
 # Usage: exec.sh ROOT SAMPLE [CPUS] [FORCE]
 set -euo pipefail
 
@@ -41,93 +41,34 @@ fi
 
 NCPUS=$(( CPUS < $(nproc) ? CPUS : $(nproc) ))
 
-# ---- helper: run RGI on one FASTA ----
-_run_rgi() {
-  local fasta="$1" context="$2" label="$3"
-  [[ -s "$fasta" ]] || { echo "[rgi] skip $context/$label (empty/missing)"; return 0; }
+# ---- input: central gene calls; RGI protein mode on genes.faa ----
+# (protein mode cannot evaluate rRNA mutation models; all others apply)
+GENES="$ROOT/SRA/assemblies/genes/$SAMPLE/genes.faa"
+[[ -s "$GENES" ]] || { echo "[rgi] missing $GENES (run: bin/main.sh run assembly --sample $SAMPLE)"; exit 2; }
 
-  local ctx_dir="$OUT/$context"; mkdir -p "$ctx_dir"
-  local outpfx="$ctx_dir/${label}"
-
-  # skip if already done for this context
-  [[ -s "${outpfx}.txt" && "$FORCE" != "1" ]] && {
-    echo "[rgi] skip $context/$label (cached)"; return 0; }
-
-  echo "[rgi] scanning $context/$label: $fasta"
-  # run from CARD_DATA dir so --local finds localDB
+# Every gene is scanned once; context is assigned later from the contig ID.
+CTX_DIR="$OUT/genes"; mkdir -p "$CTX_DIR"
+OUTPFX="$CTX_DIR/genes"
+if [[ -s "${OUTPFX}.txt" && "$FORCE" != "1" && "${OUTPFX}.txt" -nt "$GENES" ]]; then
+  echo "[rgi] cached -> ${OUTPFX}.txt"
+else
+  # RGI rejects '*' stop symbols in protein input
+  sed '/^>/!s/\*//g' "$GENES" > "$CTX_DIR/genes.nostop.faa"
+  echo "[rgi] scanning $(grep -c '^>' "$GENES") proteins: $GENES"
   rgi main \
-    -i "$fasta" \
-    -o "$outpfx" \
-    -t contig \
+    -i "$CTX_DIR/genes.nostop.faa" \
+    -o "$OUTPFX" \
+    -t protein \
     -a DIAMOND \
     -n "$NCPUS" \
     --include_loose \
     --local \
     --clean \
-    2>&1 || { echo "[rgi] WARNING: $context/$label failed"; return 0; }
-
-  if [[ -s "${outpfx}.txt" ]]; then
-    local n; n=$(tail -n +2 "${outpfx}.txt" | wc -l)
-    echo "[rgi] $context/$label: $n AMR gene hits"
-  fi
-}
-
-total=0
-
-# ---- 1) Contigs ----
-CONTIGS="$ROOT/SRA/assemblies/spades/$SAMPLE/contigs.fasta"
-[[ -s "$CONTIGS" ]] || CONTIGS="$ROOT/SRA/assemblies/metaviralspades/$SAMPLE/contigs.fasta"
-if [[ -s "$CONTIGS" ]]; then
-  _run_rgi "$CONTIGS" "contigs" "contigs"
-  ((total++)) || true
+    2>&1
+  rm -f "$CTX_DIR/genes.nostop.faa"
+  [[ -f "${OUTPFX}.txt" ]] || { echo "[rgi] ERROR: no ${OUTPFX}.txt"; exit 4; }
 fi
+echo "[rgi] $(tail -n +2 "${OUTPFX}.txt" | wc -l) AMR gene hits (incl. Loose)"
 
-# ---- 2) MAGs ----
-shopt -s nullglob
-# refined MAGScoT bins if present, else raw MetaBAT2 bins
-MAG_BINS=( "$ROOT/SRA/binning/magscot/$SAMPLE/bins"/*.fa )
-[[ ${#MAG_BINS[@]} -gt 0 ]] || MAG_BINS=( "$ROOT/SRA/binning/metabat2/$SAMPLE"/bin.*.fa )
-shopt -u nullglob
-if [[ ${#MAG_BINS[@]} -gt 0 ]]; then
-  for bin in "${MAG_BINS[@]}"; do
-    [[ -s "$bin" ]] || continue
-    label=$(basename "$bin" .fa)
-    _run_rgi "$bin" "mags" "$label"
-    ((total++)) || true
-  done
-else
-  echo "[rgi] skip MAGs (no bins found for $SAMPLE)"
-fi
-
-# ---- 3) Plasmids ----
-PLASMIDS=""
-for p in "$ROOT/SRA/plasmids/$SAMPLE/cluster/plasmids_derep.$SAMPLE.fasta" \
-         "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_union.fasta" \
-         "$ROOT/SRA/plasmids/$SAMPLE/union/plasmids_concat.fasta" \
-         "$ROOT/SRA/plasmids/$SAMPLE/union/"*.fasta; do
-  if [[ -s "$p" ]]; then PLASMIDS="$p"; break; fi
-done
-if [[ -n "$PLASMIDS" ]]; then
-  _run_rgi "$PLASMIDS" "plasmids" "plasmids"
-  ((total++)) || true
-else
-  echo "[rgi] skip plasmids (no union FASTA for $SAMPLE)"
-fi
-
-# ---- 4) Viruses ----
-VIRUSES=""
-for v in "$ROOT/SRA/viruses/$SAMPLE/union/viruses_union.fasta" \
-         "$ROOT/SRA/viruses/$SAMPLE/union/viruses_concat.fasta" \
-         "$ROOT/SRA/viruses/$SAMPLE/union/"*.fasta; do
-  if [[ -s "$v" ]]; then VIRUSES="$v"; break; fi
-done
-if [[ -n "$VIRUSES" ]]; then
-  _run_rgi "$VIRUSES" "viruses" "viruses"
-  ((total++)) || true
-else
-  echo "[rgi] skip viruses (no union FASTA for $SAMPLE)"
-fi
-
-echo "[rgi] scanned $total context(s)"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"
 echo "[rgi] done -> $OUT"

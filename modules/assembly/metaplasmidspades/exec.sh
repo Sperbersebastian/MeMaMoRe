@@ -5,9 +5,6 @@ set -euo pipefail
 ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 
 
-# --- trace who invoked me ---
-printf '[mps] invoked by PPID=%s CMD="%s"\n' "$PPID" "$(ps -o command= -p "$PPID" | tail -n1)"
-command -v pstree >/dev/null 2>&1 && { echo "[mps] pstree:"; pstree -salp $$ | sed -n '1,8p'; }
 
 # Only run MPS if explicitly requested:
 #  - ONLY=metaplasmidspades
@@ -19,10 +16,16 @@ fi
 
 
 # collect reads from both layouts, ohne eval/CRLF-Probleme
-# --- collect reads (only from qc/fastp) ---
+# --- collect reads (fastp or host-cleaned, see bin/lib/reads.sh) ---
 shopt -s nullglob
-R1=( "$ROOT/SRA/qc/fastp/$SAMPLE/"*trimmed_1*.fastq.gz )
-R2=( "$ROOT/SRA/qc/fastp/$SAMPLE/"*trimmed_2*.fastq.gz )
+# shellcheck source=bin/lib/reads.sh
+source "$ROOT/bin/lib/reads.sh"
+# fastp output, or host-cleaned reads when modules.qc.host_removal = human
+_rr="$(qc_reads "$SAMPLE")" || exit 2
+IFS=$'\t' read -r _r1 _r2 <<<"$_rr"
+R1=(); R2=()
+[[ -s "$_r1" ]] && R1=( "$_r1" )
+[[ -n "$_r2" && -s "$_r2" ]] && R2=( "$_r2" )
 
 shopt -u nullglob
 

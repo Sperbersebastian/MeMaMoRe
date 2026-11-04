@@ -13,6 +13,6 @@ fa = open(os.path.join(a.midfolder, "input.txt")).read().strip()
 ids = [ln[1:].split()[0] for ln in open(fa) if ln.startswith(">")]
 os.makedirs(a.out, exist_ok=True)
 with open(os.path.join(a.out, "host_lineage.tsv"), "w") as f:
-    f.write("contig\tphylum\tclass\torder\tfamily\tgenus\n")
+    f.write("Contig\tPhylum\tClass\tOrder\tFamily\tGenus\tSpecies\n")   # real HOTSPOT header
     for i in ids:
-        f.write(f"{i}\tPseudomonadota\tGammaproteobacteria\tEnterobacterales\tEnterobacteriaceae\tEscherichia\n")
+        f.write(f"{i}\tPseudomonadota\tGammaproteobacteria\tEnterobacterales\tEnterobacteriaceae\tEscherichia\t-\n")

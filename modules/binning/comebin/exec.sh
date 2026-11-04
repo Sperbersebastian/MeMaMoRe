@@ -35,7 +35,7 @@ fi
 # ── Paths
 ASM_DIR="$ROOT/SRA/assemblies/spades/$SAMPLE"
 CONTIGS="$ASM_DIR/contigs.fasta"
-BAM_DIR="$ASM_DIR/map"
+BAM_DIR="${BAM_DIR:-$ASM_DIR/map}"   # group dir with one BAM per member for multi-sample coverage
 OUT_DIR="$ROOT/SRA/binning/comebin/$SAMPLE"
 LOG="$OUT_DIR/run.log"
 mkdir -p "$OUT_DIR"

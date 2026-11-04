@@ -40,7 +40,10 @@ if [[ -s "$DONE" ]]; then
 fi
 
 # ---------- run ----------
-cmd=( genomad end-to-end "$IN" "$OUT" "$DB" --threads "$CPUS" )
+# shellcheck source=bin/lib/genomad_opts.sh
+source "$ROOT/bin/lib/genomad_opts.sh"
+mapfile -t GOPTS < <(genomad_opts)
+cmd=( genomad end-to-end "$IN" "$OUT" "$DB" --threads "$CPUS" "${GOPTS[@]}" )
 # GENOMAD_SPLITS>0 lowers MMseqs2 RAM use (needed on machines with <~20 GB RAM)
 [[ "${GENOMAD_SPLITS:-0}" -gt 0 ]] && cmd+=( --splits "$GENOMAD_SPLITS" )
 echo "[genomad] ${cmd[*]}"

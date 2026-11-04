@@ -27,7 +27,12 @@ _init_canonical(){
   local canon_dir
   canon_dir="$(dirname "$canon")"
   _mkdirp "$canon_dir"
-  [[ -s "$canon" ]] || echo -e "sample\tfq1\tfq2" > "$canon"
+  [[ -s "$canon" ]] || echo -e "sample\tfq1\tfq2\tgroup" > "$canon"
+  # older manifests have no group column: add an empty one
+  if head -n1 "$canon" | grep -qv $'\tgroup'; then
+    awk -F'\t' 'BEGIN{OFS="\t"} NR==1{print "sample","fq1","fq2","group"; next} {print $1,$2,$3,""}' "$canon" > "$canon.tmp" \
+      && mv "$canon.tmp" "$canon"
+  fi
 }
 
 # Normalize into SRA/reads/<sample>/sample_R{1,2}.fastq[.gz] (symlinks)
@@ -58,11 +63,13 @@ _link_normalized(){
 #   Usage: run_ingest --fastq manifest.tsv
 #          run_ingest --srr SRRxxxxxx      (single accession; uses $SAMPLE)
 #   manifest.tsv columns (tab-separated, header required):
-#       sample   fq1   fq2
+#       sample   fq1   fq2   [group]
 #   fq2 is optional; leave empty for single-end
+#   group (optional): samples of one group are binned with each other's
+#   coverage (multi-sample binning); assembly always stays per sample
 # -------------------------------------------------------------------
 run_ingest(){
-  local FASTQ_MANIFEST="" SRR_ACC=""
+  local FASTQ_MANIFEST="" SRR_ACC="" SRR_GROUP=""
   local CANONICAL
   CANONICAL="$(yq -r '.modules.ingest.canonical_manifest // "SRA/reads/manifest.tsv"' "$PARAMS_YAML" 2>/dev/null || echo "SRA/reads/manifest.tsv")"
 
@@ -73,6 +80,8 @@ run_ingest(){
       --fastq=*) FASTQ_MANIFEST="${1#--fastq=}"; shift ;;
       --srr) SRR_ACC="${2:-}"; shift 2 ;;
       --srr=*) SRR_ACC="${1#--srr=}"; shift ;;
+      --group) SRR_GROUP="${2:-}"; shift 2 ;;
+      --group=*) SRR_GROUP="${1#--group=}"; shift ;;
       --set|--from|--only|--sample) shift 2 || true ;;
       --test|--resume|--force) shift ;;
       *) shift ;;
@@ -83,7 +92,7 @@ run_ingest(){
   if [[ -n "$SRR_ACC" ]]; then
     [[ -n "${SAMPLE:-}" ]] || _die "--srr requires --sample"
     FASTQ_MANIFEST="$(mktemp)"
-    printf "sample\tsrr\n%s\t%s\n" "$SAMPLE" "$SRR_ACC" > "$FASTQ_MANIFEST"
+    printf "sample\tsrr\tgroup\n%s\t%s\t%s\n" "$SAMPLE" "$SRR_ACC" "$SRR_GROUP" > "$FASTQ_MANIFEST"
   fi
 
   [[ -n "$FASTQ_MANIFEST" && -s "$FASTQ_MANIFEST" ]] || _die "Provide --fastq <manifest.tsv> or --srr <accession>"
@@ -97,7 +106,7 @@ run_ingest(){
   fi
 
   # Header column indexes
-  local col_sample=0 col_fq1=0 col_fq2=0 col_srr=0 col_md5=0
+  local col_sample=0 col_fq1=0 col_fq2=0 col_srr=0 col_md5=0 col_group=0
   local i=1
   for col in $hdr; do
     case "$col" in
@@ -106,6 +115,7 @@ run_ingest(){
       fq2)    col_fq2=$i    ;;
       srr)    col_srr=$i    ;;
       md5)    col_md5=$i    ;;
+      group)  col_group=$i  ;;
     esac
     ((i++))
   done
@@ -119,12 +129,14 @@ run_ingest(){
   awk -F'\t' 'NF{print}' | \
   while IFS=$'\t' read -r -a cols; do
     # bash array is 0-indexed, awk/cut logic was 1-indexed. offset by 1.
-    local sample="" fq1="" fq2="" srr="" md5=""
+    local sample="" fq1="" fq2="" srr="" md5="" group=""
     [[ $col_sample -gt 0 ]] && sample="${cols[$((col_sample-1))]:-}"
     [[ $col_fq1 -gt 0 ]]    && fq1="${cols[$((col_fq1-1))]:-}"
     [[ $col_fq2 -gt 0 ]]    && fq2="${cols[$((col_fq2-1))]:-}"
     [[ $col_srr -gt 0 ]]    && srr="${cols[$((col_srr-1))]:-}"
     [[ $col_md5 -gt 0 ]]    && md5="${cols[$((col_md5-1))]:-}"
+    [[ $col_group -gt 0 ]]  && group="${cols[$((col_group-1))]:-}"
+    [[ -z "$group" || "$group" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || _die "$sample: invalid group name '$group'"
 
     [[ -n "$sample" ]] || continue
 
@@ -192,11 +204,7 @@ run_ingest(){
     awk -F'\t' -v s="$sample" 'NR==1 || $1!=s' "$canon_path" > "$canon_path.tmp" && mv "$canon_path.tmp" "$canon_path"
 
     # Append to canonical manifest (fq2/norm2 may be empty)
-    if [[ -n "${norm2:-}" ]]; then
-      echo -e "${sample}\t${norm1}\t${norm2}" >> "$canon_path"
-    else
-      echo -e "${sample}\t${norm1}\t"         >> "$canon_path"
-    fi
+    printf '%s\t%s\t%s\t%s\n' "$sample" "$norm1" "${norm2:-}" "$group" >> "$canon_path"
 
     echo "[ingest] ${sample} -> $(dirname "$norm1")"
   done

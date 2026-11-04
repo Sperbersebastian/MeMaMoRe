@@ -15,7 +15,7 @@ run_assembly(){
   [[ -s "$MANI" ]] || { echo "Missing $MANI. Run ingest first."; exit 2; }
 
   # sample \t fq1 \t fq2
-  tail -n +2 "$MANI" | tr -d '\r' | while IFS=$'\t' read -r SID R1 R2; do
+  tail -n +2 "$MANI" | tr -d '\r' | while IFS=$'\t' read -r SID R1 R2 _GROUP; do
     [[ -n "${SAMPLE:-}" && "$SID" != "$SAMPLE" ]] && continue
 
     # choose inputs (prefer testsets in --test if present)
@@ -43,5 +43,9 @@ run_assembly(){
     # 2) Contig QC per sample (expects outputs from step 1)
     ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" MODE="$MODE" R1="$IN1" R2="${IN2:-}" FORCE="${FORCE:-0}" \
       bash "$ROOT/modules/assembly/contig_qc/exec.sh"
+
+    # 3) Central gene prediction (Pyrodigal) shared by ARG tools and MAGScoT
+    ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" FORCE="${FORCE:-0}" \
+      bash "$ROOT/modules/assembly/genes/exec.sh"
   done
 }

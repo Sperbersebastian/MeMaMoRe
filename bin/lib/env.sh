@@ -71,6 +71,7 @@ _env_name(){
     plasme)                 echo "plasme_env" ;;
     genomad)                echo "genomad_env" ;;
     mobrecon)               echo "mobsuite_env" ;;
+    plasmer)                echo "plasmer_env" ;;
     union_cluster)          echo "plasmids_core" ;;
     typing_hotspot)         echo "hotspot_env" ;;
     typer)                  echo "mobsuite_env" ;;
@@ -80,15 +81,19 @@ _env_name(){
     metaviralspades)        echo "env_assembly_core" ;;
     virsorter2)             echo "virsorter2_env" ;;
     vibrant)                echo "vibrant_env" ;;
+    deepvirfinder)          echo "dvf_env" ;;
     union_virus)            echo "plasmids_core" ;;
     checkv)                 echo "checkv_env" ;;
     iphop)                  echo "iphop_env" ;;
+    catalog)                echo "drep_env" ;;
     # --- ARG-Submodule ---
     args)                   echo "env_args" ;;
     deeparg)                echo "deeparg_env" ;;
     rgi)                    echo "rgi_env" ;;
     amrplusplus)            echo "amrplusplus_env" ;;
     abricate)               echo "abricate_env" ;;
+    amrfinderplus)          echo "amrfinder_env" ;;
+    mge|mobileog)           echo "mge_env" ;;
     summary_args)           echo "deeparg_env" ;;
     *)                      echo "UNKNOWN" ;;
   esac
@@ -115,6 +120,10 @@ _resolve_creator(){
     union_virus)
       [[ -s "$ROOT/envs/create_env_plasmids.sh" ]] && { echo "$ROOT/envs/create_env_plasmids.sh"; return 0; }
       ;;
+    amrfinderplus) echo "$ROOT/envs/create_env_amrfinder.sh"; return 0 ;;
+    mge|mobileog)  echo "$ROOT/envs/create_env_mge.sh"; return 0 ;;
+    catalog)       echo "$ROOT/envs/create_env_drep.sh"; return 0 ;;
+    deepvirfinder) echo "$ROOT/envs/create_env_dvf.sh"; return 0 ;;
     # ARG substeps: summary_args reuses deeparg env
     summary_args)
       [[ -s "$ROOT/envs/create_env_deeparg.sh" ]] && { echo "$ROOT/envs/create_env_deeparg.sh"; return 0; }
@@ -123,7 +132,8 @@ _resolve_creator(){
   return 1
 }
 
-_list_env_names(){ micromamba env list | awk 'NR>2{print $1}' | sed '/^$/d'; }
+# names from --json: the table view shows no names for envs outside the first envs_dirs entry
+_list_env_names(){ micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##'; }
 
 _env_exists(){
   local name="$1"
@@ -146,12 +156,15 @@ _env_exists(){
     _list_env_names | grep -qx genomad_env       &&
     _list_env_names | grep -qx virsorter2_env    &&
     _list_env_names | grep -qx vibrant_env       &&
-    _list_env_names | grep -qx checkv_env
+    _list_env_names | grep -qx checkv_env        &&
+    _list_env_names | grep -qx dvf_env
   elif [[ "$name" == "env_args" ]]; then
     _list_env_names | grep -qx deeparg_env      &&
     _list_env_names | grep -qx rgi_env           &&
     _list_env_names | grep -qx amrplusplus_env   &&
-    _list_env_names | grep -qx abricate_env
+    _list_env_names | grep -qx abricate_env      &&
+    _list_env_names | grep -qx amrfinder_env     &&
+    _list_env_names | grep -qx mge_env
   else
     _list_env_names | grep -qx "$name"
   fi
@@ -169,9 +182,9 @@ _recreate_env(){
 # =========================
 list_env_specs(){
   for m in ingest qc assembly binning sra_tools sim mapping_coverm coverm plasmids \
-           viralverify plasme genomad mobrecon typer cluster union_cluster typing_hotspot \
-           viruses virsorter2 vibrant checkv iphop \
-           args deeparg rgi amrplusplus abricate summary_args; do
+           viralverify plasme genomad mobrecon plasmer typer cluster union_cluster typing_hotspot \
+           viruses virsorter2 vibrant deepvirfinder checkv iphop \
+           args deeparg rgi amrplusplus abricate amrfinderplus mge mobileog summary_args catalog; do
     local env create
     env="$(_env_name "$m")"
     if create="$(_resolve_creator "$m")"; then :; else
@@ -277,12 +290,12 @@ remove_env_by_module(){
       ;;
     env_viruses)
       # shared envs (assembly/plasmids) are left in place
-      for e in virsorter2_env vibrant_env checkv_env; do
+      for e in virsorter2_env vibrant_env checkv_env dvf_env; do
         micromamba env remove -n "$e" -y || true
       done
       ;;
     env_args)
-      for e in deeparg_env rgi_env amrplusplus_env abricate_env; do
+      for e in deeparg_env rgi_env amrplusplus_env abricate_env amrfinder_env mge_env; do
         micromamba env remove -n "$e" -y || true
       done
       ;;

@@ -120,9 +120,10 @@ def main():
     rows = []
     for i, (sample, cov) in enumerate(samples.items(), 1):
         r1, r2 = simulate(sample, cov, seqs, out, seed=i)
-        rows.append(f"{sample}\t{r1}\t{r2}")
+        rows.append(f"{sample}\t{r1}\t{r2}\t{a.profile}")
+    # all samples of a test set form one binning group, so the multi-sample path is always tested
     with open(os.path.join(out, "manifest.tsv"), "w") as m:
-        m.write("sample\tfq1\tfq2\n" + "\n".join(rows) + "\n")
+        m.write("sample\tfq1\tfq2\tgroup\n" + "\n".join(rows) + "\n")
     print(f"[testdata] manifest: {os.path.join(out, 'manifest.tsv')}")
 
 

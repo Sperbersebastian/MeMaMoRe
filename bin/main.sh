@@ -40,6 +40,8 @@ Direct helpers:
 
 Modules:
   ingest, qc, assembly, binning, sim, plasmids, viruses, args, all
+  catalog   project MAG catalog over all samples (dRep v4/skani + CoverM) -> SRA/summary/mag_catalog.tsv
+            (bin/main.sh run catalog [--samples=s1,s2])
 USAGE
 }
 
@@ -82,21 +84,34 @@ run_sim_wrap(){ export ROOT="$ROOT"; export CFG="${CFG:-$ROOT/config/sim.yaml}"
 
 run_plasmids_wrap(){
   [[ -s "$ROOT/bin/modules/plasmids.sh" ]] || { echo "[err] bin/modules/plasmids.sh not found"; exit 2; }
-  export ROOT MODE RESUME FORCE FROM ONLY SAMPLE
+  local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
+  : > "$m"; merge "$p" "$m"          # config/defaults.yaml + local.yaml + --set
+  export PARAMS_YAML="$p" ROOT MODE RESUME FORCE FROM ONLY SAMPLE
   bash "$ROOT/bin/modules/plasmids.sh"
 }
 
 run_viruses_wrap(){
   [[ -s "$ROOT/bin/modules/viruses.sh" ]] || { echo "[err] bin/modules/viruses.sh not found"; exit 2; }
-  export ROOT MODE RESUME FORCE FROM ONLY SAMPLE
+  local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
+  : > "$m"; merge "$p" "$m"          # config/defaults.yaml + local.yaml + --set
+  export PARAMS_YAML="$p" ROOT MODE RESUME FORCE FROM ONLY SAMPLE
   bash "$ROOT/bin/modules/viruses.sh"
 }
 
 run_args_wrap(){
   [[ -s "$ROOT/bin/modules/args.sh" ]] || { echo "[err] bin/modules/args.sh not found"; exit 2; }
-  export ROOT MODE RESUME FORCE FROM ONLY SAMPLE
+  local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
+  : > "$m"; merge "$p" "$m"          # config/defaults.yaml + local.yaml + --set
+  export PARAMS_YAML="$p" ROOT MODE RESUME FORCE FROM ONLY SAMPLE
   bash "$ROOT/bin/modules/args.sh"
 }
+
+run_catalog_wrap(){ ensure_env_by_module "catalog"; local m p; m="$(mktemp)"; p="$(mktemp)"; trap 'rm -f "$m" "$p"' RETURN
+  : > "$m"; merge "$p" "$m"
+  local a CAT_SAMPLES=""
+  for a in "${ARGS[@]:-}"; do case "$a" in --samples=*) CAT_SAMPLES="${a#--samples=}" ;; esac; done
+  export PARAMS_YAML="$p" ROOT CATALOG_SAMPLES="$CAT_SAMPLES"
+  run_in_env "drep_env" bash "$ROOT/bin/modules/catalog.sh"; }
 
 # ---- new: run all ----
 run_all_wrap(){
@@ -169,8 +184,8 @@ case "$cmd" in
         --sample) require_val "$1" "${2:-}"; SAMPLE="$2"; shift ;;
         --set)    require_val "$1" "${2:-}"; SETS+=("$2"); shift ;;
         --set=*)  SETS+=("${1#--set=}") ;;
-        --fastq|--srr|--fasta) require_val "$1" "${2:-}"; ARGS+=("$1" "$2"); shift ;;
-        --fastq=*|--srr=*|--fasta=*) ARGS+=("$1") ;;
+        --fastq|--srr|--fasta|--group) require_val "$1" "${2:-}"; ARGS+=("$1" "$2"); shift ;;
+        --fastq=*|--srr=*|--fasta=*|--group=*) ARGS+=("$1") ;;
         --force-env|--force-env=all) FORCE_ENV_MODE="all" ;;
         --force-env=*) FORCE_ENV_MODE="one"; FORCE_ENV_TARGET="${1#*=}" ;;
         *) ARGS+=("$1") ;;
@@ -191,6 +206,9 @@ case "$cmd" in
       esac
     fi
     export FORCE_ENV_MODE FORCE_ENV_TARGET
+    # versions.tsv for this run (also when the module fails): logs/runs/<time>_<module>_<sample>/
+    RUN_DIR="$ROOT/logs/runs/$(date -u +%Y%m%dT%H%M%SZ)_${mod}_${SAMPLE:-all}"
+    trap 'micromamba env list --json 2>/dev/null | python3 "$ROOT/scripts/collect_versions.py" "$ROOT" "$mod" "${SAMPLE:-}" "$RUN_DIR/versions.tsv" - >/dev/null 2>&1 || true' EXIT
     case "$mod" in
       ingest)   run_ingest_wrap   ;;
       qc)       run_qc_wrap       ;;
@@ -200,6 +218,7 @@ case "$cmd" in
       plasmids) run_plasmids_wrap ;;
       viruses)  run_viruses_wrap  ;;
       args)     run_args_wrap     ;;
+      catalog)  run_catalog_wrap  ;;   # project-wide MAG catalog (dRep + CoverM)
       all)      : "${SAMPLE:?need --sample for plasmids/viruses in all}"; run_all_wrap ;;
       *) usage; exit 2 ;;
     esac

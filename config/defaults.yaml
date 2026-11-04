@@ -1,6 +1,6 @@
 global:
   threads: 8
-  contig_min_len: 1000
+  contig_min_len: 1000          # assembly filter, contig QC, gene calls (genes.faa)
   ani: 95
   cov: 85
 
@@ -10,6 +10,10 @@ modules:
     test_fraction: 0.10
     test_seed: 42
   qc:
+    # host read removal after fastp with Hostile: none (default) | human
+    # (human = index human-t2t-hla, T2T-CHM13v2.0 + HLA; fetched into refdata/hostile)
+    host_removal: none
+    host_index: human-t2t-hla
     fastp:
       length_required: 50
       qualified_quality_phred: 15
@@ -21,3 +25,56 @@ modules:
     qc:
       breadth_min: 0.8
       depth_min: 2.0
+  binning:
+    min_contig_len: 1500        # MetaBAT2 (hard floor 1500) and Binny
+    # multi-sample binning: samples sharing a 'group' (ingest manifest or config/samples.tsv)
+    # get every member's reads mapped onto each assembly (n x n mappings); bins stay per sample
+    max_group: 20               # larger groups only trigger a warning (no automatic split)
+    semibin2: true              # SemiBin2 as 4th binner (best effort, into MAGScoT)
+    semibin2_environment: ""    # "" = self-supervised; or a pre-trained habitat (e.g. human_gut)
+    # GUNC chimerism check after MAGScoT; gunc_pass feeds the MAG quality tier
+    gunc: true
+    bakta: false                # optional Bakta annotation of the refined MAGs
+    bakta_db: light             # light (~3.4 GB) | full (~71 GB), fetched into refdata/bakta
+  catalog:
+    # project MAG catalog (bin/main.sh run catalog): dRep v4 with skani
+    ani: 0.95                   # secondary clustering ANI (species level)
+    min_completeness: 50        # CheckM2, passed to dRep via --genomeInfo
+    max_contamination: 10
+  hosts:
+    # plasmid host by abundance correlation (run catalog): plasmid clusters x catalog MAGs
+    min_samples: 6              # fewer samples: no correlation (note in plasmid_hosts.tsv)
+    min_rho: 0.7                # Spearman rho
+    max_p: 0.05                 # permutation p-value
+    crispr: true                # MinCED spacers of MAGs vs plasmid/virus contigs (blastn-short)
+    crispr_max_mismatch: 1      # mismatches + gaps over the full spacer length
+  plasmids:
+    # union: every candidate of any predictor (default, previous behaviour)
+    # min2 / min3: candidates confirmed by >= 2 / 3 predictors, i.e. covered over
+    # >= consensus_min_overlap of their length by the other tools' candidates
+    consensus: union
+    consensus_min_overlap: 0.5
+    plasmer: true               # Plasmer (needs >= 32 GB RAM, else skipped)
+    plasmer_min_len: 500        # Plasmer -m
+    min_len: 2000               # plasmid candidates entering union/clustering
+    plasme_min_len: 0           # PLASMe post-filter (0 = off)
+    hotspot_min_len: 1500       # HOTSPOT host prediction input
+  genomad:
+    # filters of geNomad end-to-end (plasmid, virus and typer runs)
+    preset: default             # default | conservative | relaxed
+    min_score: 0.7              # --min-score (geNomad default; ignored with a preset)
+  viruses:
+    min_len: 1000               # VirSorter2 --min-length, VIBRANT -l
+    virsorter2_min_score: 0.5   # VirSorter2 --min-score (its default)
+    vibrant_min_orfs: 4         # VIBRANT -o (its default, can only be increased)
+    vibrant_virome: false       # VIBRANT -virome for virome (VLP) samples
+    deepvirfinder: true         # DeepVirFinder as 5th predictor (dvf_env, CPU)
+    dvf_min_score: 0.9          # keep contigs with score >= this ...
+    dvf_max_p: 0.05             # ... and p-value < this
+  args:
+    mge: true                   # ISEScan + IntegronFinder 2 for ARG context
+    is_window: 5000             # bp: ARG counts as "near IS" within this distance
+    mobileog: true              # mobileOG-db 2.0.1 (DIAMOND on genes.faa), MGE genes near ARGs
+    mobileog_min_id: 90         # thresholds as in mobileOGs-pl
+    mobileog_min_qcov: 90
+    mobileog_evalue: 1e-20

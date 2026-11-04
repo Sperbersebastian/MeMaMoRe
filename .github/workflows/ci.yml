@@ -59,9 +59,12 @@ jobs:
         run: STUB_WORK="$RUNNER_TEMP/stub" tests/stub/run.sh
       - name: GUI shows results for every module
         run: python tests/stub/check_gui.py "$RUNNER_TEMP/stub"
-      - name: optional steps may fail or find nothing (COMEBin crash, no Binny bins, no circular plasmids)
+      - name: optional steps may fail or find nothing; host removal and plasmid consensus on
         run: |
-          STUB_FAIL=run_comebin.sh STUB_BINNY_EMPTY=1 STUB_NO_CIRCULAR=1 STUB_WORK="$RUNNER_TEMP/stub_fail" tests/stub/run.sh
+          STUB_FAIL=run_comebin.sh STUB_BINNY_EMPTY=1 STUB_NO_CIRCULAR=1 \
+          STUB_SET="modules.qc.host_removal=human modules.plasmids.consensus=min2 modules.binning.bakta=true" \
+          STUB_WORK="$RUNNER_TEMP/stub_fail" tests/stub/run.sh
+          ls "$RUNNER_TEMP"/stub_fail/SRA/qc/hostile/stub/stub_clean_1.fastq.gz
           ls "$RUNNER_TEMP"/stub_fail/SRA/binning/magscot/stub/bins/*.fa
       - name: upload logs on failure
         if: failure()
