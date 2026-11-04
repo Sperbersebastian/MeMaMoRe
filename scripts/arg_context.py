@@ -211,11 +211,26 @@ def main():
             hits["abricate_resfinder"][best] = f"{r.get('GENE', '')} ({r.get('RESISTANCE', '')})"
             add_aro(best, abr_aro.get((r.get("SEQUENCE"), r.get("START"), r.get("END"))))
 
+    # mobile genetic element context: IS elements (window) and integrons (overlap)
+    window = int(os.environ.get("IS_WINDOW", "5000"))
+    mge_dir = os.path.join(args_dir, "mge")
+    is_by_contig, int_by_contig = defaultdict(list), defaultdict(list)
+    for r in read_tsv(os.path.join(mge_dir, "is_elements.tsv")):
+        is_by_contig[r["contig"]].append((int(r["start"]), int(r["end"]), f"{r['is_id']}({r['family']})"))
+    for r in read_tsv(os.path.join(mge_dir, "integrons.tsv")):
+        int_by_contig[r["contig"]].append((int(r["start"]), int(r["end"]), f"{r['integron_id']}({r['type']})"))
+
+    def near(table, contig, gid, pad):
+        if gid not in genes:
+            return ""
+        _, gs, ge = genes[gid]
+        return ";".join(lbl for s_, e_, lbl in table.get(contig, []) if gs <= e_ + pad and ge >= s_ - pad)
+
     tools = ["deeparg", "rgi", "amrfinderplus", "abricate_resfinder"]
     all_genes = sorted({g for t in tools for g in hits[t]},
                        key=lambda g: (contig_of(g), genes.get(g, ("", 0, 0))[1]))
     cols = ["gene_id", "contig", "start", "end", "mag", "plasmid_cluster", "plasmid_tools", "virus_id",
-            "n_tools", "aro"] + tools + ["plasmid_contig_in_mag"]
+            "n_tools", "aro"] + tools + ["near_IS", "in_integron", "plasmid_contig_in_mag"]
     rows = []
     for g in all_genes:
         c = contig_of(g)
@@ -229,6 +244,8 @@ def main():
             "n_tools": sum(1 for t in tools if g in hits[t]),
             "aro": ",".join(sorted(aro.get(g, ()))),
             **{t: hits[t].get(g, "") for t in tools},
+            "near_IS": near(is_by_contig, c, g, window),
+            "in_integron": near(int_by_contig, c, g, 0),
             "plasmid_contig_in_mag": "yes" if (m and (pc or pt)) else "",
         })
     with open(os.path.join(out_dir, "arg_context.tsv"), "w", newline="") as f:

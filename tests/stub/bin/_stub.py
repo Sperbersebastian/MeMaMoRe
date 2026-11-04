@@ -837,6 +837,34 @@ def argnorm():
     write(out, "\n".join(rows) + "\n")
 
 
+
+def integron_finder():
+    """integron_finder [--local-max] --outdir D contigs.fasta: one complete integron on the plasmid contig."""
+    fa = positional(skip_values_for=("--outdir", "--cpu", "-dt", "--distance-threshold", "--topology-file"))[-1]
+    base = Path(fa).name.rsplit(".", 1)[0]
+    res = mkdir(Path(opt("--outdir", default=".")) / f"Results_Integron_Finder_{base}")
+    rows = ["# integron_finder stub",
+            "ID_integron\tID_replicon\telement\tpos_beg\tpos_end\tstrand\tevalue\ttype_elt\tannotation\tmodel\t"
+            "type\tdefault\tdistance_2attC\tconsidered_topology"]
+    for cid, _ in records(fa):
+        if kind_of(cid) == "plasmid":
+            rows.append(f"integron_01\t{cid}\t{cid}_1\t1\t300\t1\tNA\tprotein\tintI\tintersection_tyr_intI\tcomplete\tYes\tNA\tlin")
+            rows.append(f"integron_01\t{cid}\tattc_001\t620\t900\t1\t1e-5\tattC\tattC\tattc_4\tcomplete\tYes\tNA\tlin")
+    write(res / f"{base}.integrons", "\n".join(rows) + "\n")
+
+
+def isescan():
+    """isescan.py --seqfile F --output D: one IS element next to the first gene of each plasmid contig."""
+    fa, out = opt("--seqfile"), Path(opt("--output"))
+    rows = ["seqID\tfamily\tcluster\tisBegin\tisEnd\tisLen\tncopy4is\tstart1\tend1\tstart2\tend2\tscore\t"
+            "irId\tirLen\tnGaps\torfBegin\torfEnd\tstrand\torfLen\tE-value\tE-value4copy\ttype\tov\ttir"]
+    for cid, _ in records(fa):
+        if kind_of(cid) == "plasmid":
+            rows.append(f"{cid}\tIS6\tIS6_1\t2000\t2820\t821\t1\t2000\t2020\t2800\t2820\t20\t18\t20\t0\t"
+                        f"2050\t2780\t+\t731\t1e-80\t1e-80\tc\t0\tGGTTCTGTTGCAAAGTTT")
+    write(out / (Path(fa).name + ".tsv"), "\n".join(rows) + "\n")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -851,6 +879,7 @@ HANDLERS = {
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
     "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2, "amrfinder": amrfinder, "argnorm": argnorm,
+    "integron_finder": integron_finder, "isescan.py": isescan,
 }
 
 if __name__ == "__main__":

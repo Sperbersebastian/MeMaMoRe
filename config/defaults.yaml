@@ -44,3 +44,6 @@ modules:
     hotspot_min_len: 1500       # HOTSPOT host prediction input
   viruses:
     min_len: 1000               # VirSorter2 --min-length, VIBRANT -l
+  args:
+    mge: true                   # ISEScan + IntegronFinder 2 for ARG context
+    is_window: 5000             # bp: ARG counts as "near IS" within this distance

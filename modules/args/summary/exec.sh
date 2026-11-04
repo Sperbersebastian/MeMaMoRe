@@ -103,7 +103,9 @@ echo "[arg-summary] plasmid replicons: $(tail -n +2 "$REP" | wc -l) -> $REP"
 [[ $count -gt 0 ]] || echo "[arg-summary] WARNING: no ARG results from any tool"
 
 # gene-centric context table; also derives the context column of the tables above
-python3 "$ROOT/scripts/arg_context.py" "$ROOT" "$SAMPLE"
+# shellcheck source=bin/lib/cfg.sh
+source "$ROOT/bin/lib/cfg.sh"
+IS_WINDOW="$(cfg modules.args.is_window 5000)" python3 "$ROOT/scripts/arg_context.py" "$ROOT" "$SAMPLE"
 
 TOTAL=$(tail -n +2 "$SUMMARY" | wc -l)
 echo "[arg-summary] unified table: $TOTAL entries from $count sources"
