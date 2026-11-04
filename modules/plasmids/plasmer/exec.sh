@@ -3,10 +3,11 @@
 # Plasmer (k-mer + genomic-feature plasmid predictor) on the metaSPAdes contigs.
 # Output: SRA/plasmids/<s>/plasmer/results/<s>.plasmer.predPlasmids.fa (+ predClass/
 # predProb tables); picked up by union_cluster with prefix "plasmer".
-# Plasmer loads its k-mer DB into RAM (>= 32 GB): on smaller machines the step is
-# skipped with a message (PLASMER_FORCE=1 / PLASMER_MIN_MEM_GB override).
+# Plasmer loads its k-mer DB into memory (~32 GB, RAM + swap count; on a 15 GB
+# laptop with swap it ran in ~35 min): below that bin/modules/plasmids.sh skips
+# the step (PLASMER_FORCE=1 / PLASMER_MIN_MEM_GB override).
 # DB: refdata/plasmer (plasmerMainDB + customizedKraken2DB, Zenodo 7030675,
-# ~14 GB packed), fetched on first use.
+# ~14 GB packed, ~68 GB unpacked), fetched on first use.
 # Usage: exec.sh ROOT SAMPLE [CPUS] [FORCE]
 set -euo pipefail
 
@@ -26,7 +27,7 @@ MINLEN="$(cfg modules.plasmids.plasmer_min_len 500)"
 
 DB="${PLASMER_DB:-$ROOT/refdata/plasmer}"
 if [[ ! -f "$DB/.extracted" ]]; then
-  echo "[plasmer] DB missing -> downloading into $DB (~14 GB packed)"
+  echo "[plasmer] DB missing -> downloading into $DB (~14 GB packed, ~68 GB unpacked)"
   mkdir -p "$DB/tmp"
   for f in plasmerMainDB.tar.xz customizedKraken2DB.tar.xz; do
     curl -fL -C - -o "$DB/tmp/$f" "https://zenodo.org/records/7030675/files/$f?download=1"

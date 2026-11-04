@@ -30,14 +30,11 @@ fa_files=( "$BINS"/*.fa )
 echo "[gtdbtk] .fa files found: ${#fa_files[@]} in $BINS"
 [[ ${#fa_files[@]} -gt 0 ]] || { echo "[gtdbtk] no .fa bins -> exit 0"; exit 0; }
 
-# --- memory preflight: classify_wf needs ~64 GB RAM (pplacer); on smaller
-#     machines it gets OOM-killed late, so skip with a clear message instead
-MIN_GB="${GTDBTK_MIN_MEM_GB:-64}"
-MEM_GB=$(( $(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null || echo 0) / 1024 / 1024 ))
-if [[ "$MEM_GB" -lt "$MIN_GB" && "${GTDBTK_FORCE:-0}" != "1" ]]; then
-  echo "[gtdbtk] SKIP: ${MEM_GB} GB RAM < ${MIN_GB} GB needed (set GTDBTK_FORCE=1 or GTDBTK_MIN_MEM_GB to override)"
-  exit 0
-fi
+# --- memory preflight: classify_wf needs ~64 GB (pplacer; RAM + swap count,
+#     pplacer also uses --scratch_dir); below that skip with a clear message
+# shellcheck source=bin/lib/memory.sh
+source "$ROOT/bin/lib/memory.sh"
+mem_gate gtdbtk "${GTDBTK_MIN_MEM_GB:-64}" || exit 0
 
 # --- DB: resolve + verify via check_install
 DBROOT_INPUT="${GTDBTK_DATA_PATH:-$ROOT/refdata/gtdbtk/release226}"

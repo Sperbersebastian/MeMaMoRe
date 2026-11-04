@@ -196,15 +196,15 @@ _run_step "viralverify"    "$MOD/viralverify/exec.sh"    "$SAMPLE"
 _run_step "genomad"        "$MOD/genomad/exec.sh"        "$SAMPLE"
 _run_step "plasme"         "$MOD/plasme/exec.sh"         "$SAMPLE"
 _run_step "mobrecon"       "$MOD/mobrecon/exec.sh"       "$SAMPLE"
-# Plasmer: 5th predictor; needs >= 32 GB RAM, checked here so that plasmer_env
-# and its ~14 GB DB are not set up on machines that cannot run it
+# Plasmer: 5th predictor; needs ~32 GB (RAM + swap), checked here so that
+# plasmer_env and its DB (~14 GB packed, ~68 GB unpacked) are not set up on
+# machines that cannot run it
+# shellcheck source=bin/lib/memory.sh
+source "$ROOT/bin/lib/memory.sh"
 _plasmer_on="$(PARAMS_YAML="${PARAMS_YAML:-}" bash -c 'source "$ROOT/bin/lib/cfg.sh"; cfg modules.plasmids.plasmer true')"
-_mem_gb=$(( $(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null || echo 0) / 1024 / 1024 ))
 if [[ "$_plasmer_on" =~ ^(false|False|0|no)$ ]]; then
   echo "[skip] $SAMPLE :: plasmer (modules.plasmids.plasmer: false)"
-elif [[ "$_mem_gb" -lt "${PLASMER_MIN_MEM_GB:-32}" && "${PLASMER_FORCE:-0}" != "1" ]]; then
-  echo "[skip] $SAMPLE :: plasmer (${_mem_gb} GB RAM < ${PLASMER_MIN_MEM_GB:-32} GB; PLASMER_FORCE=1 overrides)"
-else
+elif mem_gate plasmer "${PLASMER_MIN_MEM_GB:-32}"; then
   _run_step "plasmer"      "$MOD/plasmer/exec.sh"        "$SAMPLE"
 fi
 # 3) collect plasmids from 0–2
