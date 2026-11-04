@@ -87,7 +87,7 @@ run_binning(){
     mkdir -p "$BINNY_OUTDIR" "$BINNY_OUTDIR/tmp"
 
     ROOT="$ROOT" PARAMS_YAML="$PARAMS_YAML" SAMPLE="$SID" CONTIGS="$CONTIGS" BAM="$BAM" FORCE="${FORCE:-0}" \
-      bash "$ROOT/modules/binning/binny/exec.sh"
+      bash "$ROOT/modules/binning/binny/exec.sh" || echo "[binny] $SID failed (see logs/binning_binny_${SID}.log); continuing with the other binners"
 
     # ---- COMEBin (best effort) ----
     local GFA="$ASM_DIR/assembly_graph_with_scaffolds.gfa"

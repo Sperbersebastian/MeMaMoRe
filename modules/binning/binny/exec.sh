@@ -108,6 +108,15 @@ prep_hmm_dir "$BINNY_DIR/database/hmms/checkm_pf"
 export PYTHONPATH="$BINNY_DIR:$BINNY_DIR/workflow/scripts:${PYTHONPATH:-}"
 mkdir -p "$BINNY_DIR/logs"
 
+# ---- reuse an unchanged result; otherwise clear old bins first (Binny refuses
+#      to start when bins/*.fasta exist: "Bin dir contains fasta files")
+MAP_SET="$OUTDIR/contigs_to_bin.with_set.tsv"
+if [[ "${FORCE:-0}" != "1" && -f "$OUTDIR/binny.done" && -f "$MAP_SET" && "$MAP_SET" -nt "$CONTIGS" \
+      && ( ! -s "${CDEPTH:-}" || "$MAP_SET" -nt "$CDEPTH" ) ]]; then
+  echo "[binny] $SAMPLE cached -> $OUTDIR"; exit 0
+fi
+rm -rf "$OUTDIR/bins" "$OUTDIR/binny.done"
+
 # ---- run Snakemake inside env_binning
 LOG="$LOGS/binning_binny_${SAMPLE}.log"
 {
