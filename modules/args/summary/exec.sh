@@ -65,6 +65,14 @@ if [[ -s "$AMRPP_FILE" ]]; then
   ((count++)) || true
 fi
 
+# --- AMRFinderPlus (genes.faa; AMR elements only here, --plus STRESS/VIRULENCE stay in its table) ---
+AMRF="$ROOT/SRA/args/$SAMPLE/amrfinderplus/genes.tsv"
+if [[ -s "$AMRF" ]]; then
+  echo "[arg-summary] adding AMRFinderPlus/genes"
+  tail -n +2 "$AMRF" | awk -F'\t' 'BEGIN{OFS="\t"} $9=="AMR" {print "amrfinderplus","genes",$6,$11,$1,$17,$16,"subclass="$12";method="$13}' >> "$SUMMARY"
+  ((count++)) || true
+fi
+
 # ABRicate (columns: FILE SEQUENCE START END STRAND GENE COVERAGE COVERAGE_MAP GAPS
 #                     %COVERAGE %IDENTITY DATABASE ACCESSION PRODUCT RESISTANCE)
 ABR_DIR="$ROOT/SRA/args/$SAMPLE/abricate"

@@ -808,6 +808,35 @@ def semibin2():
         write_fasta(out / "output_bins" / f"SemiBin_{i}.fa", recs)
 
 
+
+AMRF_COLS = ["Protein id", "Contig id", "Start", "Stop", "Strand", "Element symbol", "Element name", "Scope",
+             "Type", "Subtype", "Class", "Subclass", "Method", "Target length", "Reference sequence length",
+             "% Coverage of reference", "% Identity to reference", "Alignment length",
+             "Closest reference accession", "Closest reference name", "HMM accession", "HMM description"]
+
+
+def amrfinder():
+    if has("--database_version") or has("-u") or has("--update"):
+        print("Database version: stub")
+        return
+    hits = [("blaCTX-M-15", "BETA-LACTAM"), ("tet(A)", "TETRACYCLINE")]
+    rows = ["\t".join(AMRF_COLS)]
+    for (sym, cls), gid in zip(hits, read_fasta_ids(opt("-p", "--protein"))):
+        rows.append("\t".join([gid, "", "1", "861", "+", sym, sym + " stub", "core", "AMR", "AMR", cls, cls,
+                               "EXACTP", "287", "287", "100.00", "100.00", "287", "WP_stub", sym, "NA", "NA"]))
+    write(opt("-o", "--output"), "\n".join(rows) + "\n")
+
+
+def argnorm():
+    """argnorm TOOL [--db X] -i IN -o OUT: copy the table, add ARO columns."""
+    inp, out = opt("-i", "--input"), opt("-o", "--output")
+    with open(inp) as f:
+        lines = [ln.rstrip("\n") for ln in f if ln.strip()]
+    rows = ["# argNorm version: stub", lines[0] + "\tARO\tARO_name\tconfers_resistance_to"]
+    rows += [ln + "\tARO:3000001\tstub gene\tARO:0000001" for ln in lines[1:]]
+    write(out, "\n".join(rows) + "\n")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -821,7 +850,7 @@ HANDLERS = {
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
-    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2,
+    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2, "amrfinder": amrfinder, "argnorm": argnorm,
 }
 
 if __name__ == "__main__":

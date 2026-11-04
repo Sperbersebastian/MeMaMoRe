@@ -90,6 +90,7 @@ _env_name(){
     rgi)                    echo "rgi_env" ;;
     amrplusplus)            echo "amrplusplus_env" ;;
     abricate)               echo "abricate_env" ;;
+    amrfinderplus)          echo "amrfinder_env" ;;
     summary_args)           echo "deeparg_env" ;;
     *)                      echo "UNKNOWN" ;;
   esac
@@ -116,6 +117,7 @@ _resolve_creator(){
     union_virus)
       [[ -s "$ROOT/envs/create_env_plasmids.sh" ]] && { echo "$ROOT/envs/create_env_plasmids.sh"; return 0; }
       ;;
+    amrfinderplus) echo "$ROOT/envs/create_env_amrfinder.sh"; return 0 ;;
     # ARG substeps: summary_args reuses deeparg env
     summary_args)
       [[ -s "$ROOT/envs/create_env_deeparg.sh" ]] && { echo "$ROOT/envs/create_env_deeparg.sh"; return 0; }
@@ -153,7 +155,8 @@ _env_exists(){
     _list_env_names | grep -qx deeparg_env      &&
     _list_env_names | grep -qx rgi_env           &&
     _list_env_names | grep -qx amrplusplus_env   &&
-    _list_env_names | grep -qx abricate_env
+    _list_env_names | grep -qx abricate_env      &&
+    _list_env_names | grep -qx amrfinder_env
   else
     _list_env_names | grep -qx "$name"
   fi
@@ -173,7 +176,7 @@ list_env_specs(){
   for m in ingest qc assembly binning sra_tools sim mapping_coverm coverm plasmids \
            viralverify plasme genomad mobrecon plasmer typer cluster union_cluster typing_hotspot \
            viruses virsorter2 vibrant checkv iphop \
-           args deeparg rgi amrplusplus abricate summary_args; do
+           args deeparg rgi amrplusplus abricate amrfinderplus summary_args; do
     local env create
     env="$(_env_name "$m")"
     if create="$(_resolve_creator "$m")"; then :; else
@@ -284,7 +287,7 @@ remove_env_by_module(){
       done
       ;;
     env_args)
-      for e in deeparg_env rgi_env amrplusplus_env abricate_env; do
+      for e in deeparg_env rgi_env amrplusplus_env abricate_env amrfinder_env; do
         micromamba env remove -n "$e" -y || true
       done
       ;;

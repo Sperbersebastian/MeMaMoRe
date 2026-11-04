@@ -18,8 +18,9 @@ rewrites the 'context' column of args_summary.tsv (genes/contigs rows) to the
 derived context (mag, plasmid, virus, unbinned; ';'-joined when several apply).
 
 Hits per tool: DeepARG (genes.ffn), RGI Perfect/Strict (genes.faa; Loose only
-with RGI_INCLUDE_LOOSE=1), ABRicate/ResFinder (contigs; assigned to the gene
-with the largest overlap). AMR++ is read-based and has no gene context.
+with RGI_INCLUDE_LOOSE=1), AMRFinderPlus (AMR elements, genes.faa), ABRicate/
+ResFinder (contigs; assigned to the gene with the largest overlap); 'aro' joins
+the ARO terms of RGI and argNorm. AMR++ is read-based and has no gene context.
 Standard library only.
 """
 import csv
@@ -34,6 +35,15 @@ def read_tsv(path):
         return []
     with open(path, newline="") as f:
         return list(csv.DictReader(f, delimiter="\t"))
+
+
+def read_tsv_commented(path):
+    """TSV with leading '#' comment lines (argNorm output)."""
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        return []
+    with open(path, newline="") as f:
+        lines = [ln for ln in f if not ln.startswith("# ")]
+    return list(csv.DictReader(lines, delimiter="\t"))
 
 
 def fasta_ids(path):
@@ -165,6 +175,31 @@ def main():
         gid = (r.get("ORF_ID") or "").split()[0]
         if gid:
             hits["rgi"][gid] = f"{r.get('Best_Hit_ARO', '')} ({r.get('Drug Class', '')})"
+    for r in read_tsv(os.path.join(args_dir, "amrfinderplus", "genes.tsv")):
+        if r.get("Type") == "AMR" and r.get("Protein id"):
+            hits["amrfinderplus"][r["Protein id"]] = f"{r.get('Element symbol', '')} ({r.get('Class', '')})"
+
+    # ARO terms: RGI reports them, argNorm adds them for DeepARG, AMRFinderPlus, ResFinder
+    aro = defaultdict(set)
+
+    def add_aro(gid, value):
+        for a in (value or "").replace(";", ",").split(","):
+            a = a.strip()
+            if a.startswith("ARO:"):
+                aro[gid].add(a)
+            elif a.isdigit():
+                aro[gid].add("ARO:" + a)
+    for r in read_tsv(os.path.join(args_dir, "rgi", "genes", "genes.txt")):
+        if r.get("Cut_Off") != "Loose" or loose:
+            add_aro((r.get("ORF_ID") or "").split()[0], r.get("ARO"))
+    for r in read_tsv_commented(os.path.join(args_dir, "deeparg", "genes", "genes.argnorm.tsv")):
+        add_aro((r.get("read_id") or "").split()[0], r.get("ARO"))
+    for r in read_tsv_commented(os.path.join(args_dir, "amrfinderplus", "genes.argnorm.tsv")):
+        if r.get("Type") == "AMR":
+            add_aro(r.get("Protein id", ""), r.get("ARO"))
+    abr_aro = {(r.get("SEQUENCE"), r.get("START"), r.get("END")): r.get("ARO")
+               for r in read_tsv_commented(os.path.join(args_dir, "abricate", "resfinder", "contigs", "contigs.argnorm.tsv"))}
+
     for r in read_tsv(os.path.join(args_dir, "abricate", "resfinder", "contigs", "contigs.tsv")):
         c, hs, he = r.get("SEQUENCE", ""), int(r.get("START") or 0), int(r.get("END") or 0)
         best, best_ov = None, 0
@@ -174,12 +209,13 @@ def main():
                 best, best_ov = gid, ov
         if best:
             hits["abricate_resfinder"][best] = f"{r.get('GENE', '')} ({r.get('RESISTANCE', '')})"
+            add_aro(best, abr_aro.get((r.get("SEQUENCE"), r.get("START"), r.get("END"))))
 
-    tools = ["deeparg", "rgi", "abricate_resfinder"]
+    tools = ["deeparg", "rgi", "amrfinderplus", "abricate_resfinder"]
     all_genes = sorted({g for t in tools for g in hits[t]},
                        key=lambda g: (contig_of(g), genes.get(g, ("", 0, 0))[1]))
     cols = ["gene_id", "contig", "start", "end", "mag", "plasmid_cluster", "plasmid_tools", "virus_id",
-            "n_tools"] + tools + ["plasmid_contig_in_mag"]
+            "n_tools", "aro"] + tools + ["plasmid_contig_in_mag"]
     rows = []
     for g in all_genes:
         c = contig_of(g)
@@ -191,6 +227,7 @@ def main():
             "gene_id": g, "contig": c, "start": gs, "end": ge, "mag": m,
             "plasmid_cluster": pc, "plasmid_tools": pt, "virus_id": virus_of(g, c),
             "n_tools": sum(1 for t in tools if g in hits[t]),
+            "aro": ",".join(sorted(aro.get(g, ()))),
             **{t: hits[t].get(g, "") for t in tools},
             "plasmid_contig_in_mag": "yes" if (m and (pc or pt)) else "",
         })
