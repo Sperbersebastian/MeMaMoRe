@@ -95,6 +95,10 @@ run_binning(){
     ROOT="$ROOT" SAMPLE="$SID" BAM="$BAM" \
       bash "$ROOT/modules/binning/comebin/exec.sh" || echo "[comebin] $SID skipped or failed"
 
+    # ---- SemiBin2 (best effort, like COMEBin) ----
+    ROOT="$ROOT" SAMPLE="$SID" PARAMS_YAML="$PARAMS_YAML" CPUS="$CPUS" FORCE="${FORCE:-0}" \
+      bash "$ROOT/modules/binning/semibin2/exec.sh" || echo "[semibin2] $SID skipped or failed"
+
     # ---- merge candidate bin sets for MAGScoT ----
     local MAGSCOT_DIR="$ROOT/SRA/binning/magscot/$SID"
     mkdir -p "$MAGSCOT_DIR"
@@ -103,7 +107,8 @@ run_binning(){
     for f in \
       "$ROOT/SRA/binning/metabat2/$SID/contigs_to_bin.with_set.tsv" \
       "$ROOT/SRA/binning/binny/$SID/contigs_to_bin.with_set.tsv" \
-      "$ROOT/SRA/binning/comebin/$SID/contigs_to_bin.with_set.tsv"
+      "$ROOT/SRA/binning/comebin/$SID/contigs_to_bin.with_set.tsv" \
+      "$ROOT/SRA/binning/semibin2/$SID/contigs_to_bin.with_set.tsv"
     do
       if [[ -s "$f" ]]; then cat "$f" >> "$MAGSCOT_IN"; fi
     done

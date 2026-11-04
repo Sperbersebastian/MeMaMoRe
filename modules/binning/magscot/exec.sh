@@ -41,6 +41,7 @@ mk_map_from_bins(){ # $1=dir $2=glob $3=tag $4=outfile
 MB_DIR="$ROOT/SRA/binning/metabat2/$SAMPLE"
 BN_DIR="$ROOT/SRA/binning/binny/$SAMPLE/bins"
 CB_DIR="$ROOT/SRA/binning/comebin/$SAMPLE/comebin_res/comebin_res_bins"
+SB_DIR="$ROOT/SRA/binning/semibin2/$SAMPLE/output_bins"
 
 MB_EXIST_1="$ROOT/SRA/binning/metabat2/$SAMPLE/contigs_to_bin.with_set.tsv"
 MB_EXIST_2="$ROOT/SRA/binning/metabat2/$SAMPLE/contigs_to_bin.tsv"
@@ -48,11 +49,13 @@ BN_EXIST_1="$ROOT/SRA/binning/binny/$SAMPLE/contigs_to_bin.with_set.tsv"
 BN_EXIST_2="$ROOT/SRA/binning/binny/$SAMPLE/contigs_to_bin.tsv"
 CB_EXIST_1="$ROOT/SRA/binning/comebin/$SAMPLE/contigs_to_bin.with_set.tsv"
 CB_EXIST_2="$ROOT/SRA/binning/comebin/$SAMPLE/contigs_to_bin.tsv"
+SB_EXIST_1="$ROOT/SRA/binning/semibin2/$SAMPLE/contigs_to_bin.with_set.tsv"
 
 # Zielkarten nur unter $OUT/maps
 MB_MAP="$MAPDIR/metabat2.with_set.tsv"
 BN_MAP="$MAPDIR/binny.with_set.tsv"
 CB_MAP="$MAPDIR/comebin.with_set.tsv"
+SB_MAP="$MAPDIR/semibin2.with_set.tsv"
 
 # Symlink oder on-the-fly Build (Tool-Ordner bleiben unangetastet)
 if   [[ -s "$MB_EXIST_1" ]]; then ln -sf "$MB_EXIST_1" "$MB_MAP"
@@ -66,6 +69,9 @@ else mk_map_from_bins "$BN_DIR" "*.fa*" "binny" "$BN_MAP"; fi
 if   [[ -s "$CB_EXIST_1" ]]; then ln -sf "$CB_EXIST_1" "$CB_MAP"
 elif [[ -s "$CB_EXIST_2" ]]; then ln -sf "$CB_EXIST_2" "$CB_MAP"
 else mk_map_from_bins "$CB_DIR" "*.fa*" "comebin" "$CB_MAP"; fi
+
+if   [[ -s "$SB_EXIST_1" ]]; then ln -sf "$SB_EXIST_1" "$SB_MAP"
+else mk_map_from_bins "$SB_DIR" "*.fa" "semibin2" "$SB_MAP"; fi
 
 # ---------- Normalisierung auf 3 Spalten + contig/bin-Korrektur ----------
 normalize_map(){ # $1=in $2=tag
@@ -90,11 +96,12 @@ normalize_map(){ # $1=in $2=tag
 normalize_map "$MB_MAP" metabat2
 normalize_map "$BN_MAP" binny
 normalize_map "$CB_MAP" comebin
+normalize_map "$SB_MAP" semibin2
 
 # ---------- RAW normalisiert aufbauen (alle Tools), nur identische Zeilen entfernen ----------
 RAW_NORM="$OUT/contigs_to_bin.raw.norm.tsv"
 : > "$RAW_NORM"
-for f in "$MB_MAP" "$BN_MAP" "$CB_MAP"; do
+for f in "$MB_MAP" "$BN_MAP" "$CB_MAP" "$SB_MAP"; do
   if [[ -s "$f" ]]; then cat "$f"; fi
 done \
 | awk -F'\t' 'BEGIN{OFS="\t"} NF==3{k=$1 FS $2 FS $3; if(!(k in seen)){seen[k]=1; print}}' \
@@ -142,6 +149,12 @@ fi
 INPUT_FOR_MAGS="$RAW_NORM"
 # MAGScoT writes <prefix>.refined.contig_to_bin.out (binnew \t contig), <prefix>.refined.out, <prefix>.scores.out
 REFINED="$OUT/MAGScoT.refined.contig_to_bin.out"
+# results are only reused for the same candidate bins (e.g. not after a new binner)
+IN_SUM="$(md5sum < "$INPUT_FOR_MAGS" | cut -d' ' -f1)"
+if [[ -s "$REFINED" && "$(cat "$OUT/.magscot_input.md5" 2>/dev/null)" != "$IN_SUM" ]]; then
+  echo "[magscot] candidate bins changed -> recomputing"
+  rm -f "$OUT"/MAGScoT.*
+fi
 if [[ ! -s "$REFINED" ]]; then
   # MAGScoT's bin-merging step crashes when no bin pair qualifies for merging
   # (left_join on an empty table); retry without merging in that case.
@@ -170,6 +183,7 @@ if [[ ! -s "$REFINED" && -s "$SCORES" ]]; then
     rm -f "$REFINED.tmp"
   fi
 fi
+echo "$IN_SUM" > "$OUT/.magscot_input.md5"
 [[ -s "$REFINED" ]] || { echo "[magscot] no refined bins ($REFINED missing)"; exit 0; }
 
 # ---------- refined bins -> bins/<bin>.fa (input for CheckM2, barrnap/tRNAscan, GTDB-Tk) ----------

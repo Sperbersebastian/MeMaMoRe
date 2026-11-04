@@ -797,6 +797,17 @@ def plasmer():
     write(res / f"{pfx}.plasmer.predProb.tsv", "".join(f"{c}\t0.97\t0.03\n" for c, _ in pl))
 
 
+
+def semibin2():
+    """SemiBin2 single_easy_bin -i CONTIGS -b BAM... -o OUT -> OUT/output_bins/SemiBin_N.fa"""
+    if ARGS[:1] != ["single_easy_bin"]:
+        log(f"unhandled SemiBin2 {ARGS[:1]}; no-op")
+        return
+    out = Path(opt("-o", "--output"))
+    for i, (b, recs) in enumerate(sorted(contigs_by_bin(opt("-i", "--input-fasta")).items())):
+        write_fasta(out / "output_bins" / f"SemiBin_{i}.fa", recs)
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -810,7 +821,7 @@ HANDLERS = {
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
     "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop, "pyrodigal": pyrodigal,
-    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer,
+    "nucmer": nucmer, "show-coords": show_coords, "gunc": gunc, "hostile": hostile, "Plasmer": plasmer, "SemiBin2": semibin2,
 }
 
 if __name__ == "__main__":
