@@ -124,6 +124,29 @@ GTDB-Tk (skipped with a message on smaller machines, `GTDBTK_FORCE=1` overrides)
 | `modules.qc.host_removal` | `none` | `human`: Hostile removes reads of the human genome (T2T-CHM13v2.0 + HLA, Bowtie2 index ~4 GB in `refdata/hostile`) after fastp; every downstream step then uses `SRA/qc/hostile/<sample>/` |
 | `modules.binning.gunc` | `true` | GUNC chimerism check of the refined MAGs (ProGenomes 2.1 DB ~13 GB in `refdata/gunc`); chimeric MAGs are tier `low` in `mags.tsv` |
 | `modules.plasmids.consensus` | `union` | `min2` / `min3`: plasmid candidates must be confirmed by 2 / 3 predictors (overlap `consensus_min_overlap`, 0.5) |
+| `modules.plasmids.plasmer` | `true` | Plasmer as 5th plasmid predictor (DB ~14 GB packed; skipped below 32 GB RAM, `PLASMER_FORCE=1`) |
+| `modules.binning.semibin2` | `true` | SemiBin2 as 4th binner (best effort, like COMEBin) |
+| `modules.binning.bakta` | `false` | Bakta annotation of the refined MAGs (`bakta_db: light` ~3.4 GB or `full` ~71 GB) |
+| `modules.viruses.deepvirfinder` | `true` | DeepVirFinder as 5th virus predictor (`dvf_min_score` 0.9, `dvf_max_p` 0.05) |
+| `modules.args.mge` | `true` | ISEScan + IntegronFinder 2: `near_IS` (within `is_window`, 5 kb) and `in_integron` in `arg_context.tsv` |
+| `modules.args.mobileog` | `true` | mobileOG-db 2.0.1 (DIAMOND on `genes.faa`, ~2.3 GB): MGE genes around each ARG |
+| `modules.hosts.crispr` | `true` | CRISPR spacers of MAGs vs plasmid/virus contigs (in `run catalog`) |
+| `modules.genomad.preset` / `min_score` | `default` / 0.7 | geNomad filters; also `modules.viruses.virsorter2_min_score` (0.5), `vibrant_min_orfs` (4), `vibrant_virome` |
+
+### Gene calls, ARG context, multi-sample binning
+
+* **Central gene calls:** `SRA/assemblies/genes/<sample>/genes.{faa,ffn,gff}` (Pyrodigal, metagenome
+  mode, IDs `<contig>_<n>`) feed DeepARG-LS, RGI (protein mode), AMRFinderPlus, MAGScoT, GUNC,
+  SemiBin2 and mobileOG-db. geNomad, VIBRANT, VirSorter2, CheckV, CheckM2 and GTDB-Tk keep their own.
+* **ARG context:** every gene is scanned once; `SRA/args/<sample>/summary/arg_context.tsv` has one
+  row per ARG gene with MAG, plasmid cluster, virus, hits per tool, ARO terms (argNorm),
+  `near_IS`, `in_integron`, `mobileOG_neighbours` and `plasmid_contig_in_mag` (GUI: ARGs tab).
+* **Binning groups:** optional `group` column in the ingest manifest (or `config/samples.tsv`,
+  GUI field, `ingest --group`). Samples of a group get every member's reads mapped onto each
+  assembly (n × n mappings, existing ones reused); MetaBAT2, COMEBin and SemiBin2 use the
+  multi-sample coverage, bins stay per sample, assembly always per sample.
+  `run binning --sample S` re-bins S's whole group; groups larger than `modules.binning.max_group`
+  (20) only trigger a warning.
 
 ### Length cut-offs
 
@@ -194,6 +217,16 @@ bin/main.sh run all --sample test_sample
 ```bash
 bin/main.sh summary                 # or: --samples s1,s2
 ```
+
+**Project MAG catalog and hosts** (dRep v4/skani at 95 % ANI with CheckM2 quality, CoverM
+abundance per sample, CRISPR spacer matches, plasmid-host correlation from 6 samples on):
+
+```bash
+bin/main.sh run catalog             # -> SRA/summary/mag_catalog.tsv, plasmid_hosts.tsv, crispr_hits.tsv
+```
+
+Every `run` writes `logs/runs/<time>_<module>_<sample>/versions.tsv` (tool, env, version, DB
+version); `SRA/summary/versions.tsv` keeps the newest per tool.
 
 ---
 
