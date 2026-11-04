@@ -33,6 +33,15 @@ export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
 command -v micromamba >/dev/null 2>&1 || { echo "[env] micromamba not found at $MAMBA_ROOT_PREFIX/bin"; exit 127; }
 eval "$(micromamba shell hook --shell=bash)"
 
+# ---------- glibc >= 2.41 vs. TensorFlow (geNomad, CheckM2) ----------
+# Newer glibc refuses libraries that request an executable stack, so
+# "import tensorflow" fails with "cannot enable executable stack". This
+# tunable restores the old behaviour; older glibc ignores it.
+case ":${GLIBC_TUNABLES:-}:" in
+  *:glibc.rtld.execstack=*) ;;
+  *) export GLIBC_TUNABLES="${GLIBC_TUNABLES:+$GLIBC_TUNABLES:}glibc.rtld.execstack=2" ;;
+esac
+
 # ---------- Force-Flags (optional) ----------
 FORCE_ENV_MODE="${FORCE_ENV_MODE:-none}"     # none|all|one
 FORCE_ENV_TARGET="${FORCE_ENV_TARGET:-}"     # env- oder modul-name
