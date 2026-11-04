@@ -43,7 +43,8 @@ for ctx_dir in "$RGI_DIR"/contigs "$RGI_DIR"/mags "$RGI_DIR"/plasmids "$RGI_DIR"
     label=$(basename "$f" .txt)
     echo "[arg-summary] adding RGI/$context/$label"
     tail -n +2 "$f" | awk -F'\t' -v ctx="$context" -v lbl="$label" \
-      'BEGIN{OFS="\t"} {print "rgi",ctx,$9,$15,$1,$10,$11,"model="$12";label="lbl}' >> "$SUMMARY"
+      -v loose="${RGI_INCLUDE_LOOSE:-0}" \
+      'BEGIN{OFS="\t"} (loose=="1" || $6!="Loose") {print "rgi",ctx,$9,$15,$1,$10,$11,"cutoff="$6";model="$12";label="lbl}' >> "$SUMMARY"
     ((count++)) || true
   done
 done

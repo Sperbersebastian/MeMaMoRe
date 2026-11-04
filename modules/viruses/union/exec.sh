@@ -33,8 +33,11 @@ done
 
 [[ $count -gt 0 ]] || { echo "[virus-union] no virus FASTAs found from any tool"; exit 1; }
 
+# Several tools report the same contig under the same ID; CheckV (and others)
+# refuse duplicate IDs, so keep the first record per ID.
+awk '/^>/{id=$1; keep=!(id in seen); seen[id]=1} keep' "$CONCAT" > "$CONCAT.uniq" && mv -f "$CONCAT.uniq" "$CONCAT"
 TOTAL=$(grep -c '^>' "$CONCAT" || echo 0)
-echo "[virus-union] total concatenated: $TOTAL seqs from $count tools"
+echo "[virus-union] total concatenated (unique IDs): $TOTAL seqs from $count tools"
 
 # Deduplicate with CD-HIT at 95% identity (standard for viral genomes)
 UNION="$OUT/viruses_union.fasta"

@@ -43,10 +43,10 @@ echo "[checkv] ${cmd[*]}"
 "${cmd[@]}"
 
 # Summary
-if [[ -s "$OUT/quality_summary.tsv" ]]; then
-  echo "[checkv] quality summary:"
-  head -n 5 "$OUT/quality_summary.tsv"
-fi
+# CheckV exits 0 on input errors (e.g. duplicated IDs); only a summary counts as success
+[[ -s "$OUT/quality_summary.tsv" ]] || { echo "[checkv] ERROR: no quality_summary.tsv in $OUT"; exit 4; }
+echo "[checkv] quality summary:"
+head -n 5 "$OUT/quality_summary.tsv"
 
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"
 echo "[checkv] done -> $OUT"

@@ -8,7 +8,7 @@ Writes (tab-separated):
   samples_overview.tsv   one row per sample: reads, assembly, MAGs, plasmids, viruses, ARGs, virulence
   mags.tsv               every refined MAG with CheckM2 quality tier and GTDB-Tk taxonomy
   viruses.tsv            every virus contig with CheckV quality (and iPHoP host genus if run)
-  args_matrix.tsv        ARG gene x sample (number of hits over all tools/contexts)
+  args_matrix.tsv        tool|gene x sample (hits over all contexts; RGI Loose and AMR++ <80% gene fraction excluded upstream)
   virulence_matrix.tsv   virulence gene x sample (VFDB via ABRicate)
   replicons_matrix.tsv   plasmid replicon x sample (PlasmidFinder via ABRicate)
 Only the standard library is used; missing module outputs just leave cells empty.
@@ -182,8 +182,10 @@ def main():
             for r in args:
                 g = (r.get("gene") or "").strip()
                 if g:
-                    genes.add(g)
-                    arg_m[g][s] = arg_m[g].get(s, 0) + 1
+                    # tools name the same gene differently (CTX-M vs blaCTX-M-15_1): keep them apart
+                    key = f"{r.get('source', '')}|{g}"
+                    genes.add(key)
+                    arg_m[key][s] = arg_m[key].get(s, 0) + 1
             row["arg_hits"] = len(args)
             row["arg_genes"] = len(genes)
         vir = read_tsv(os.path.join(summ, "virulence_summary.tsv"))
@@ -206,7 +208,7 @@ def main():
     write_tsv(os.path.join(out, "viruses.tsv"),
               ["sample", "contig", "length", "checkv_quality", "completeness", "provirus", "iphop_host_genus"],
               viruses)
-    write_matrix(os.path.join(out, "args_matrix.tsv"), "gene", arg_m, samples)
+    write_matrix(os.path.join(out, "args_matrix.tsv"), "tool|gene", arg_m, samples)
     write_matrix(os.path.join(out, "virulence_matrix.tsv"), "gene", vir_m, samples)
     write_matrix(os.path.join(out, "replicons_matrix.tsv"), "replicon", rep_m, samples)
     print(f"[summary] {len(samples)} sample(s), {len(mags)} MAGs, {len(viruses)} viruses, "

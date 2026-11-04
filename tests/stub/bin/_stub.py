@@ -217,6 +217,11 @@ def samtools():
         with open(fa + ".fai", "w") as fo:
             for cid, ln in fasta_lengths(fa).items():
                 fo.write(f"{cid}\t{ln}\t0\t80\t81\n")
+    elif sub == "coverage":
+        ref = bam_ref(positional()[-1])
+        print("#rname\tstartpos\tendpos\tnumreads\tcovbases\tcoverage\tmeandepth\tmeanbaseq\tmeanmapq")
+        for cid, ln in fasta_lengths(ref).items():
+            print(f"{cid}\t1\t{ln}\t{max(1, int(ln * contig_info(cid)[1] / 150))}\t{ln}\t100\t5.0\t36\t60")
     elif sub in ("flagstat", "stats"):
         print("1000 + 0 in total (QC-passed reads + QC-failed reads)")
     else:
