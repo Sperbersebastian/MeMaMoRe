@@ -56,6 +56,8 @@ jobs:
         run: STUB_WORK="$RUNNER_TEMP/stub" tests/stub/run.sh
       - name: GUI shows results for every module
         run: python tests/stub/check_gui.py "$RUNNER_TEMP/stub"
+      - name: binning survives a COMEBin crash (best-effort step)
+        run: STUB_FAIL=run_comebin.sh STUB_WORK="$RUNNER_TEMP/stub_fail" tests/stub/run.sh
       - name: upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4

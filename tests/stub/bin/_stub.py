@@ -654,6 +654,35 @@ def rgi():
     write(prefix + ".json", "{}\n")
 
 
+
+def abricate():
+    db = opt("--db", default="ncbi")
+    fa = positional(skip_values_for=("--db", "--minid", "--mincov", "--threads"))[-1]
+    hits = {"vfdb": [("cagA", "cytotoxin-associated gene A (VF0386)", "")],
+            "resfinder": [("blaCTX-M-15", "", "Cephalosporin")],
+            "plasmidfinder": [("IncFII", "", "")]}.get(db, [])
+    rows = ["#FILE\tSEQUENCE\tSTART\tEND\tSTRAND\tGENE\tCOVERAGE\tCOVERAGE_MAP\tGAPS\t%COVERAGE\t"
+            "%IDENTITY\tDATABASE\tACCESSION\tPRODUCT\tRESISTANCE"]
+    for (gene, product, res), cid in zip(hits, read_fasta_ids(fa)):
+        rows.append(f"{os.path.basename(fa)}\t{cid}\t100\t976\t+\t{gene}\t1-876/876\t===============\t0/0\t"
+                    f"100.00\t99.89\t{db}\tACC_{gene}\t{product}\t{res}")
+    sys.stdout.write("\n".join(rows) + "\n")
+
+
+
+def iphop():
+    if ARGS[:1] != ["predict"]:
+        log(f"unhandled iphop {ARGS[:1]}; no-op")
+        return
+    out = mkdir(opt("--out_dir"))
+    rows = ["Virus,AAI to closest RefSeq,Host genus,Confidence score,List of methods"]
+    for cid in read_fasta_ids(opt("--fa_file")):
+        rows.append(f"{cid},95.1,d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales;"
+                    f"f__Enterobacteriaceae;g__Escherichia,94.3,blast;CRISPR")
+    write(out / "Host_prediction_to_genus_m90.csv", "\n".join(rows) + "\n")
+    write(out / "Host_prediction_to_genome_m90.csv", rows[0] + "\n")
+
+
 HANDLERS = {
     "fastp": fastp, "fastqc": fastqc, "multiqc": multiqc,
     "metaspades.py": spades, "spades.py": spades,
@@ -666,10 +695,14 @@ HANDLERS = {
     "metaplasmidspades.py": metaplasmidspades, "metaviralspades.py": metaviralspades,
     "viralverify": viralverify, "genomad": genomad, "mob_recon": mob_recon, "mob_typer": mob_typer,
     "virsorter": virsorter, "VIBRANT_run.py": vibrant, "checkv": checkv,
-    "bwa": bwa, "deeparg": deeparg, "rgi": rgi,
+    "bwa": bwa, "deeparg": deeparg, "rgi": rgi, "abricate": abricate, "iphop": iphop,
 }
 
 if __name__ == "__main__":
+    # STUB_FAIL=tool1,tool2 makes those tools crash, to test the pipeline's error paths
+    if TOOL in os.environ.get("STUB_FAIL", "").split(","):
+        log("simulated crash (STUB_FAIL)")
+        sys.exit(1)
     if TOOL not in HANDLERS:
         log(f"no stub for '{TOOL}'")
         sys.exit(127)

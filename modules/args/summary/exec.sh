@@ -57,6 +57,33 @@ if [[ -s "$AMRPP_FILE" ]]; then
   ((count++)) || true
 fi
 
+# ABRicate (columns: FILE SEQUENCE START END STRAND GENE COVERAGE COVERAGE_MAP GAPS
+#                     %COVERAGE %IDENTITY DATABASE ACCESSION PRODUCT RESISTANCE)
+ABR_DIR="$ROOT/SRA/args/$SAMPLE/abricate"
+VIR="$OUT/virulence_summary.tsv"
+REP="$OUT/plasmid_replicons.tsv"
+echo -e "context\tlabel\tgene\tproduct\tcontig\tidentity\tcoverage\taccession" > "$VIR"
+echo -e "context\tlabel\treplicon\tcontig\tidentity\tcoverage\taccession" > "$REP"
+for f in "$ABR_DIR"/*/*/*.tsv; do
+  [[ -s "$f" ]] || continue
+  db=$(basename "$(dirname "$(dirname "$f")")"); context=$(basename "$(dirname "$f")"); label=$(basename "$f" .tsv)
+  case "$db" in
+    vfdb)
+      tail -n +2 "$f" | awk -F'\t' -v ctx="$context" -v lbl="$label" \
+        'BEGIN{OFS="\t"} {print ctx,lbl,$6,$14,$2,$11,$10,$13}' >> "$VIR" ;;
+    plasmidfinder)
+      tail -n +2 "$f" | awk -F'\t' -v ctx="$context" -v lbl="$label" \
+        'BEGIN{OFS="\t"} {print ctx,lbl,$6,$2,$11,$10,$13}' >> "$REP" ;;
+    *)
+      echo "[arg-summary] adding ABRicate:$db/$context/$label"
+      tail -n +2 "$f" | awk -F'\t' -v ctx="$context" -v lbl="$label" -v db="$db" \
+        'BEGIN{OFS="\t"} {print "abricate:" db,ctx,$6,$15,$2,$11,$10,"cov="$10";label="lbl}' >> "$SUMMARY"
+      ((count++)) || true ;;
+  esac
+done
+echo "[arg-summary] virulence genes: $(tail -n +2 "$VIR" | wc -l) -> $VIR"
+echo "[arg-summary] plasmid replicons: $(tail -n +2 "$REP" | wc -l) -> $REP"
+
 [[ $count -gt 0 ]] || echo "[arg-summary] WARNING: no ARG results from any tool"
 
 TOTAL=$(tail -n +2 "$SUMMARY" | wc -l)

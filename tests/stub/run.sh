@@ -21,7 +21,7 @@ for d in bin modules envs config scripts gui; do ln -sfn "$REPO/$d" "$WORK/$d"; 
 export STUB_PYTHON="${STUB_PYTHON:-$(command -v python3)}"
 export MAMBA_ROOT_PREFIX="$STUB"          # main.sh/env.sh prepend $MAMBA_ROOT_PREFIX/bin
 export PATH="$STUB/bin:/usr/local/bin:/usr/bin:/bin"
-export MEMAMO_STUB=1 CPUS="${CPUS:-2}"
+export MEMAMO_STUB=1 CPUS="${CPUS:-2}" GTDBTK_FORCE=1   # stub: exercise GTDB-Tk regardless of RAM
 unset ROOT GTDBTK_DATA_PATH REFDATA_BASE VIBRANT_DB
 
 # --- placeholder external tools / reference data (only what scripts test for) ---
@@ -39,6 +39,7 @@ fake external/MAGScoT/hmm/gtdbtk_rel207_Pfam-A.hmm
 mkdir -p "$WORK/refdata/gtdbtk/release226/markers" "$WORK/refdata/mobsuite_db" "$WORK/refdata/plasme/DB"
 fake refdata/viralverify/pfam/Pfam-A.hmm
 fake refdata/genomad/genomad_db/version.txt
+mkdir -p "$WORK/refdata/iphop/Aug_2023_pub_rw"
 fake refdata/virsorter2/db/Done_all_setup
 fake refdata/vibrant/db/databases/Pfam-A_v32.HMM.h3i
 fake refdata/checkv/checkv-db-v1.5/genome_db/checkv_reps.faa
@@ -75,5 +76,7 @@ for m in "${MODULES[@]}"; do
     *)      "$WORK/bin/main.sh" run "$m" --sample "$SAMPLE" --set global.threads="$CPUS" ;;
   esac
 done
+echo "[stub] ===== summary ====="
+"$WORK/bin/main.sh" summary
 echo "[stub] all modules finished: ${MODULES[*]}"
 echo "[stub] outputs under $WORK/SRA"

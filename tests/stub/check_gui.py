@@ -32,8 +32,8 @@ expect = {
     "assembly": ["assembly", "contigs_kept", "mapping"],
     "binning": ["magscot", "checkm2"],
     "plasmids": ["mobrecon", "genomad"],
-    "viruses": ["checkv", "genomad"],
-    "args": ["summary"],
+    "viruses": ["checkv", "genomad", "iphop"],
+    "args": ["summary", "virulence", "replicons"],
 }
 for mod, keys in expect.items():
     r = c.get(f"/api/results/{sample}/{mod}")
@@ -43,6 +43,16 @@ for mod, keys in expect.items():
             fail.append(f"/api/results/{sample}/{mod}: '{k}' empty")
     print(f"{mod:9s} " + ", ".join(f"{k}={len(data.get(k) or [])}" if isinstance(data.get(k), list)
                                     else f"{k}={'ok' if data.get(k) else '-'}" for k in keys))
+
+# multi-sample summary: rebuild via the API, then read it back
+r = c.post("/api/summary/refresh")
+if r.status_code != 200:
+    fail.append(f"/api/summary/refresh: {r.status_code} {r.get_json()}")
+summ = c.get("/api/summary").get_json() or {}
+if not any(row.get("sample") == sample for row in summ.get("overview", [])):
+    fail.append("/api/summary overview has no row for the sample")
+print(f"summary   overview={len(summ.get('overview', []))}, mags={len(summ.get('mags', []))}, "
+      f"args_matrix={len(summ.get('args_matrix', []))}")
 
 if fail:
     print("\n".join("FAIL " + f for f in fail))

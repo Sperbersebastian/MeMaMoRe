@@ -39,6 +39,7 @@ _run_step(){
     vibrant)          env_name="vibrant_env" ;;
     union_virus)      env_name="plasmids_core" ;;
     checkv)           env_name="checkv_env" ;;
+    iphop)            env_name="iphop_env" ;;
     *)                env_name="plasmids_core" ;;
   esac
   run_in_env "$env_name" /bin/bash "$exec_path" "$ROOT" "$sample" "$CPUS" "$FORCE"
@@ -76,5 +77,14 @@ _run_step "vibrant"         "$MOD/vibrant/exec.sh"      "$SAMPLE"
 _run_step "union_virus"     "$MOD/union/exec.sh"        "$SAMPLE"
 # 6) CheckV quality
 _run_step "checkv"          "$MOD/checkv/exec.sh"       "$SAMPLE"
+# 7) iPHoP host prediction: optional, only with a downloaded DB (~340 GB);
+#    checked here so the (large) iphop_env is not created without a DB
+IPHOP_DB="${IPHOP_DB:-$(find "$ROOT/refdata/iphop" -mindepth 1 -maxdepth 1 -type d -name '*_rw' 2>/dev/null | sort | tail -n1)}"
+if [[ -n "$IPHOP_DB" && -d "$IPHOP_DB" ]]; then
+  export IPHOP_DB
+  _run_step "iphop"         "$MOD/iphop/exec.sh"        "$SAMPLE"
+else
+  echo "[skip] $SAMPLE :: iphop (no DB under $ROOT/refdata/iphop; see envs/create_env_iphop.sh)"
+fi
 
 echo "[viruses] DONE sample=$SAMPLE"

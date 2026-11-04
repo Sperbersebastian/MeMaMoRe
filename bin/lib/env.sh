@@ -77,11 +77,13 @@ _env_name(){
     vibrant)                echo "vibrant_env" ;;
     union_virus)            echo "plasmids_core" ;;
     checkv)                 echo "checkv_env" ;;
+    iphop)                  echo "iphop_env" ;;
     # --- ARG-Submodule ---
     args)                   echo "env_args" ;;
     deeparg)                echo "deeparg_env" ;;
     rgi)                    echo "rgi_env" ;;
     amrplusplus)            echo "amrplusplus_env" ;;
+    abricate)               echo "abricate_env" ;;
     summary_args)           echo "deeparg_env" ;;
     *)                      echo "UNKNOWN" ;;
   esac
@@ -143,7 +145,8 @@ _env_exists(){
   elif [[ "$name" == "env_args" ]]; then
     _list_env_names | grep -qx deeparg_env      &&
     _list_env_names | grep -qx rgi_env           &&
-    _list_env_names | grep -qx amrplusplus_env
+    _list_env_names | grep -qx amrplusplus_env   &&
+    _list_env_names | grep -qx abricate_env
   else
     _list_env_names | grep -qx "$name"
   fi
@@ -162,8 +165,8 @@ _recreate_env(){
 list_env_specs(){
   for m in ingest qc assembly binning sra_tools sim mapping_coverm coverm plasmids \
            viralverify plasme genomad mobrecon typer cluster union_cluster typing_hotspot \
-           viruses virsorter2 vibrant checkv \
-           args deeparg rgi amrplusplus summary_args; do
+           viruses virsorter2 vibrant checkv iphop \
+           args deeparg rgi amrplusplus abricate summary_args; do
     local env create
     env="$(_env_name "$m")"
     if create="$(_resolve_creator "$m")"; then :; else
@@ -274,7 +277,7 @@ remove_env_by_module(){
       done
       ;;
     env_args)
-      for e in deeparg_env rgi_env amrplusplus_env; do
+      for e in deeparg_env rgi_env amrplusplus_env abricate_env; do
         micromamba env remove -n "$e" -y || true
       done
       ;;
