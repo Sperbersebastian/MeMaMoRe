@@ -197,6 +197,9 @@ case "$cmd" in
       esac
     fi
     export FORCE_ENV_MODE FORCE_ENV_TARGET
+    # versions.tsv for this run (also when the module fails): logs/runs/<time>_<module>_<sample>/
+    RUN_DIR="$ROOT/logs/runs/$(date -u +%Y%m%dT%H%M%SZ)_${mod}_${SAMPLE:-all}"
+    trap 'micromamba env list --json 2>/dev/null | python3 "$ROOT/scripts/collect_versions.py" "$ROOT" "$mod" "${SAMPLE:-}" "$RUN_DIR/versions.tsv" - >/dev/null 2>&1 || true' EXIT
     case "$mod" in
       ingest)   run_ingest_wrap   ;;
       qc)       run_qc_wrap       ;;
