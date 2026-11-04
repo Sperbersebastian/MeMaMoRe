@@ -2,8 +2,12 @@
 # End-to-end test on a simulated community with known composition.
 #
 #   tests/e2e/run_e2e.sh [--config config/sim.yaml] [--cpus N] [--skip-binning] [--keep]
+#                        [--binning group|single]
 #   tests/e2e/run_e2e.sh --external DIR [--name NAME] ...   # reads and truth from elsewhere
 #
+# --binning group (default) bins the samples of a simulated set as one group (multi-sample
+# coverage); --binning single drops the group column and bins every sample alone. Single runs
+# get the suffix "-single" in their result folder, as figures/fig4_mags.py expects.
 # --external DIR skips the simulation and uses DIR/manifest.tsv (sample, fq1, fq2[, group]),
 # DIR/refs/combined.fna and DIR/truth/provenance.tsv (type, accession, ...), e.g. a published
 # benchmark data set prepared by MeMaMoRe-paper/benchmark/external/*/prepare.sh.
@@ -26,6 +30,7 @@ SKIP_BINNING=0
 KEEP=0
 EXTERNAL=""
 NAME=""
+BINNING="group"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config) CFG="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"; shift 2 ;;
@@ -34,6 +39,8 @@ while [[ $# -gt 0 ]]; do
     --keep) KEEP=1; shift ;;
     --external) EXTERNAL="$(cd "$2" && pwd)"; shift 2 ;;
     --name) NAME="$2"; shift 2 ;;
+    --binning) BINNING="$2"; shift 2
+      [[ "$BINNING" == group || "$BINNING" == single ]] || { echo "[e2e] --binning group|single" >&2; exit 2; } ;;
     -h|--help) sed -n 2,13p "$0"; exit 0 ;;
     *) echo "[e2e] unknown option: $1" >&2; exit 2 ;;
   esac
@@ -52,8 +59,9 @@ else
   SET="$(grep -E '^set_name:' "$CFG" | head -n1 | sed -E 's/^set_name:[[:space:]]*"?([^"#]*)"?.*/\1/' | xargs)"
 fi
 [[ -n "$SET" ]] || { echo "[e2e] set_name missing in $CFG" >&2; exit 2; }
+RUN="$SET"; [[ "$BINNING" == single ]] && RUN="$SET-single"
 
-OUT="$ROOT/tests/e2e/results/$SET"; mkdir -p "$OUT"
+OUT="$ROOT/tests/e2e/results/$RUN"; mkdir -p "$OUT"
 TIMES="$OUT/timings.tsv"; printf "step\tseconds\tstatus\n" > "$TIMES"
 FORCE_FLAG=(); [[ "$KEEP" == "1" ]] || FORCE_FLAG=(--force)
 
@@ -82,15 +90,30 @@ mapfile -t SAMPLES < <(tail -n +2 "$SIMMANI" | cut -f1)
 cp "$REFDIR/truth/provenance.tsv" "$OUT/"
 [[ -s "$REFDIR/truth/weights.tsv" ]] && cp "$REFDIR/truth/weights.tsv" "$OUT/"
 
-# 2) ingest the simulation manifest (sample, fq1, fq2, group), then every module per sample
-step ingest "$MAIN" run ingest --fastq "$SIMMANI"
+# 2) ingest the manifest (sample, fq1, fq2, group). For --binning single the group column is
+#    emptied, so every sample is binned on its own coverage.
+MANI="$OUT/manifest.tsv"
+if [[ "$BINNING" == single ]]; then
+  awk -F'\t' 'BEGIN{OFS="\t"} NR==1{print "sample","fq1","fq2","group"; next} {print $1,$2,$3,""}' "$SIMMANI" > "$MANI"
+else
+  cp "$SIMMANI" "$MANI"
+fi
+step ingest "$MAIN" run ingest --fastq "$MANI"
 for S in "${SAMPLES[@]}"; do
   step "qc_$S"       "$MAIN" run qc       --sample "$S" "${FORCE_FLAG[@]}"
   step "assembly_$S" "$MAIN" run assembly --sample "$S" "${FORCE_FLAG[@]}"
   need "$ROOT/SRA/assemblies/spades/$S/contigs.fasta"
-  if [[ "$SKIP_BINNING" == "0" ]]; then
-    step "binning_$S" "$MAIN" run binning --sample "$S" "${FORCE_FLAG[@]}"
-  fi
+done
+# binning needs every assembly of a group; `run binning --sample S` bins S's whole group, so
+# one call per group is enough (per sample when there are no groups)
+if [[ "$SKIP_BINNING" == "0" ]]; then
+  declare -A binned=()
+  while IFS=$'\t' read -r S _ _ G; do
+    key="${G:-$S}"; [[ -n "${binned[$key]:-}" ]] && continue; binned[$key]=1
+    step "binning_$key" "$MAIN" run binning --sample "$S" "${FORCE_FLAG[@]}"
+  done < <(tail -n +2 "$MANI")
+fi
+for S in "${SAMPLES[@]}"; do
   step "plasmids_$S" "$MAIN" run plasmids --sample "$S" "${FORCE_FLAG[@]}"
   need "$ROOT/SRA/plasmids/$S/union/plasmids_raw.fasta"
 done

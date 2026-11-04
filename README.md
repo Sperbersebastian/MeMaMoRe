@@ -361,11 +361,15 @@ CI (`.github/workflows/ci.yml`) runs this on every push/PR.
 config with several samples), runs ingest → QC → assembly → binning → plasmids for every sample,
 aligns contigs and plasmid predictions back to the references and scores every plasmid tool, their
 union and the consensus of ≥ 2 and ≥ 3 tools by precision, recall and F1. MetaQUAST measures the
-assemblies against the references.
+assemblies against the references. All samples of a simulated set form one binning group (multi-sample
+coverage, one `run binning` call per group); `--binning single` empties the group column for the
+per-sample comparison (results in `tests/e2e/results/<set>-single/`). `--external DIR` runs the
+same evaluation on a published data set (manifest, references and truth from DIR).
 
 ```bash
 tests/e2e/run_e2e.sh                      # full run
 tests/e2e/run_e2e.sh --skip-binning       # faster, without binning/GTDB-Tk
+tests/e2e/run_e2e.sh --binning single     # per-sample binning, for the group-vs-single comparison
 ```
 
 Results land in `tests/e2e/results/<set>/` (`metrics.tsv` over all samples, `timings.tsv`,
