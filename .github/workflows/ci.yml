@@ -63,6 +63,11 @@ jobs:
         run: SIM_WORK="$RUNNER_TEMP/sim" tests/sim/run.sh
       - name: GUI shows results for every module
         run: python tests/stub/check_gui.py "$RUNNER_TEMP/stub"
+      - name: ARG matrix holds no table headers (argNorm copies are not counted twice)
+        run: |
+          m="$RUNNER_TEMP/stub/SRA/summary/args_matrix.tsv"
+          test -s "$m"
+          ! grep -E '\|(GENE|Gene symbol|ARG)\b' "$m"
       - name: optional steps may fail or find nothing; host removal and plasmid consensus on
         run: |
           STUB_FAIL=run_comebin.sh STUB_BINNY_EMPTY=1 STUB_NO_CIRCULAR=1 \
