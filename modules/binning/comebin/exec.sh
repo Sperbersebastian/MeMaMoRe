@@ -58,6 +58,14 @@ else
   exit 3
 fi
 
+# ── Batch size: COMEBin trains on contigs > 1000 bp with drop_last, but run_comebin.sh
+# caps the batch size (1024) by the count of all contigs; with fewer usable contigs no
+# batch is formed and training dies ("logits referenced before assignment").
+NTRAIN="$(awk '/^>/{if(l>1000)n++; l=0; next} {l+=length($0)} END{if(l>1000)n++; print n+0}' "$CONTIGS")"
+BATCH=1024
+(( NTRAIN < BATCH )) && BATCH="$NTRAIN"
+(( BATCH >= 64 )) || { echo "[COMEBin] only $NTRAIN contigs > 1000 bp, too few to train -> skip"; exit 4; }
+
 # ── Detect existing outputs
 have_bins(){
   compgen -G "$OUT_DIR/comebin_res/comebin_res_bins/"*.fa >/dev/null || \
@@ -72,7 +80,8 @@ if [[ "$FORCE" == "1" ]] || ! have_bins; then
     -a "$CONTIGS" \
     -p "$BAM_DIR" \
     -o "$OUT_DIR" \
-    -t "$THREADS" | tee "$LOG"
+    -t "$THREADS" \
+    -b "$BATCH" | tee "$LOG"
   set +o pipefail
 else
   j "bins already exist → skipping COMEBin run"
