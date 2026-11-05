@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use MeMaMoRe, please cite it as below. A DOI will be added with the first archived release."
+title: "MeMaMoRe: Metagenomic MAG/Mobilome/Resistome Reconstruction"
+type: software
+authors:
+  - family-names: Sperber
+    given-names: Sebastian
+version: 0.9-dev
+license: MIT
+repository-code: "https://github.com/Sperbersebastian/MeMaMoRe"
+keywords:
+  - metagenomics
+  - metagenome-assembled genomes
+  - plasmids
+  - mobilome
+  - antimicrobial resistance
