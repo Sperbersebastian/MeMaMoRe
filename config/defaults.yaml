@@ -54,7 +54,7 @@ modules:
     # >= consensus_min_overlap of their length by the other tools' candidates
     consensus: union
     consensus_min_overlap: 0.5
-    plasmer: true               # Plasmer (needs >= 32 GB RAM, else skipped)
+    plasmer: true               # Plasmer (needs ~32 GB RAM + swap, else skipped)
     plasmer_min_len: 500        # Plasmer -m
     min_len: 2000               # plasmid candidates entering union/clustering
     plasme_min_len: 0           # PLASMe post-filter (0 = off)

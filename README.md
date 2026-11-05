@@ -114,8 +114,11 @@ bin/main.sh env list                # module -> env -> creator script
 Missing environments are also created on first use. Reference databases live in
 `refdata/` (override with `REFDATA_BASE`, `GTDBTK_DATA_PATH`, `VIBRANT_DB`,
 `IPHOP_DB`); most are downloaded on first run. Rough needs for everything:
-~300 GB disk (plus ~340 GB for the optional iPHoP DB), and ≥64 GB RAM for
-GTDB-Tk (skipped with a message on smaller machines, `GTDBTK_FORCE=1` overrides).
+~370 GB disk (plus ~340 GB for the optional iPHoP DB). GTDB-Tk needs ~64 GB and
+Plasmer ~32 GB of RAM + swap; below that they are skipped with a message
+(`GTDBTK_FORCE=1` / `PLASMER_FORCE=1` override). With swap they also run on small
+machines, only slower: on a 15 GB laptop with 50 GB swap, GTDB-Tk took 25 min and
+Plasmer 34 min for the mock sample (peak swap 6 / 9 GB).
 
 ### Optional steps
 
@@ -124,7 +127,7 @@ GTDB-Tk (skipped with a message on smaller machines, `GTDBTK_FORCE=1` overrides)
 | `modules.qc.host_removal` | `none` | `human`: Hostile removes reads of the human genome (T2T-CHM13v2.0 + HLA, Bowtie2 index ~4 GB in `refdata/hostile`) after fastp; every downstream step then uses `SRA/qc/hostile/<sample>/` |
 | `modules.binning.gunc` | `true` | GUNC chimerism check of the refined MAGs (ProGenomes 2.1 DB ~13 GB in `refdata/gunc`); chimeric MAGs are tier `low` in `mags.tsv` |
 | `modules.plasmids.consensus` | `union` | `min2` / `min3`: plasmid candidates must be confirmed by 2 / 3 predictors (overlap `consensus_min_overlap`, 0.5) |
-| `modules.plasmids.plasmer` | `true` | Plasmer as 5th plasmid predictor (DB ~14 GB packed; skipped below 32 GB RAM, `PLASMER_FORCE=1`) |
+| `modules.plasmids.plasmer` | `true` | Plasmer as 5th plasmid predictor (DB ~14 GB packed / ~68 GB unpacked; needs ~32 GB RAM + swap, else skipped, `PLASMER_FORCE=1`) |
 | `modules.binning.semibin2` | `true` | SemiBin2 as 4th binner (best effort, like COMEBin) |
 | `modules.binning.bakta` | `false` | Bakta annotation of the refined MAGs (`bakta_db: light` ~3.4 GB or `full` ~71 GB) |
 | `modules.viruses.deepvirfinder` | `true` | DeepVirFinder as 5th virus predictor (`dvf_min_score` 0.9, `dvf_max_p` 0.05) |
@@ -335,8 +338,9 @@ Reference run (laptop, 14 cores, 15 GB RAM; ~45 min per sample, VirSorter2 ~20 m
 completeness by CheckM2), the pEK499 genes (CTX-M-15, OXA-1, TEM, sul1, tet(A), …) via
 ResFinder/RGI/DeepARG, IncFII/IncFIA replicons, *H. pylori* cag/vac and *S. aureus*
 virulence genes via VFDB, and lambda/phiX/T4 plus *S. aureus* prophages as viruses.
-GTDB-Tk is skipped below 64 GB RAM; COMEBin fails on samples this small (too few
-contigs to train), which the pipeline tolerates.
+With swap, GTDB-Tk classifies all three MAGs to species and Plasmer finds the pEK499
+contigs (incl. the short CTX-M-15/OXA-1 fragments); COMEBin fails on samples this small
+(too few contigs to train), which the pipeline tolerates.
 
 ### Stub run (no environments, no databases)
 
