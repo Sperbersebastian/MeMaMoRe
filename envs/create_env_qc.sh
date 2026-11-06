@@ -17,4 +17,4 @@ micromamba create -y -n env_qc_core \
 micromamba create -y -n env_qc_mqc \
   -c bioconda -c conda-forge \
   --channel-priority flexible \
-  python=3.9 multiqc=1.17
+  python=3.12 "multiqc>=1.35"

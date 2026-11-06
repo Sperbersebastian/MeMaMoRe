@@ -23,7 +23,7 @@ inputs=("$IN1")
 
 # run fastqc in the correct env
 micromamba run -n env_qc_core fastqc \
-  -o "$OUTDIR" -t "$THREADS" \
+  --outdir "$OUTDIR" -t "$THREADS" \
   "${inputs[@]}" \
   >"$LOGS/qc_fastqc_${SAMPLE}.log" 2>&1
 

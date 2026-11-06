@@ -19,7 +19,7 @@ for f in "$BINS"/*.fa*; do
   rm -f "$RR/${base}.gff" "$TR/${base}.tsv"
   {
     echo "[barrnap] $base"
-    micromamba run -n env_binning barrnap --threads 8 < "$f" > "$RR/${base}.gff"
+    micromamba run -n env_binning barrnap --threads 8 "$f" > "$RR/${base}.gff"   # file argument: barrnap >= 1.x no longer reads stdin
     echo "[tRNAscan-SE] $base"
     micromamba run -n env_binning tRNAscan-SE -B -o "$TR/${base}.tsv" -q "$f"
   } >>"$LOG" 2>&1 || true
