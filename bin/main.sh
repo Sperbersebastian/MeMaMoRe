@@ -17,7 +17,7 @@ command -v micromamba >/dev/null 2>&1 || { echo "[env] micromamba not found at $
 eval "$(micromamba shell hook --shell=bash)"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export GTDBTK_DATA_PATH="${GTDBTK_DATA_PATH:-$ROOT/refdata/gtdbtk/release226}"
+export GTDBTK_DATA_PATH="${GTDBTK_DATA_PATH:-$ROOT/refdata/gtdbtk}"
 
 FORCE_ENV_MODE="none"; FORCE_ENV_TARGET=""
 MODE="full"; RESUME=1; FORCE=0; FROM=""; ONLY=""; SAMPLE=""
