@@ -281,7 +281,7 @@ Scripts handle:
 
 | Database                  | Path                         | Purpose                     | Status                |
 | ------------------------- | ---------------------------- | --------------------------- | --------------------- |
-| **GTDB-Tk r226**          | `refdata/gtdbtk/release226/` | MAG taxonomy                | ✓                     |
+| **GTDB-Tk r232**          | `refdata/gtdbtk/release232/` | MAG taxonomy                | ✓                     |
 | **PLASMe DB**             | `refdata/plasme/DB/`         | Plasmid detection           | ✓                     |
 | **geNomad DB**            | `refdata/genomad/`           | Virus/plasmid detection     | ✓                     |
 | **ViralVerify DB**        | `refdata/viralverify/`       | Auxiliary plasmid data      | ✓                     |
