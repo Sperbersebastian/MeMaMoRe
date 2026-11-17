@@ -32,7 +32,7 @@ TOOLS = {
                 ("MAGScoT/R", "env_binning", "r-base"), ("HMMER", "env_binning", "hmmer"),
                 ("GUNC", "gunc_env", "gunc"), ("CheckM2", "env_binning", "checkm2"),
                 ("barrnap", "env_binning", "barrnap"), ("tRNAscan-SE", "env_binning", "trnascan-se"),
-                ("GTDB-Tk", "env_binning", "gtdbtk")],
+                ("GTDB-Tk", "gtdbtk_env", "gtdbtk")],
     "plasmids": [("metaPlasmidSPAdes", "env_assembly_core", "spades"), ("viralVerify", "viralverify_env", "viralverify"),
                  ("geNomad", "genomad_env", "genomad"), ("MOB-suite", "mobsuite_env", "mob_suite"),
                  ("Plasmer", "plasmer_env", "plasmer"), ("MUMmer", "stampede_env", "mummer"),
@@ -61,6 +61,12 @@ def newest(pattern):
     return os.path.basename(hits[-1]) if hits else ""
 
 
+def newest_release(pattern):
+    """Highest release number (release226 < release1000), unlike the plain string sort."""
+    hits = [h for h in glob.glob(pattern) if os.path.isdir(h)]
+    return os.path.basename(max(hits, key=lambda h: int(re.sub(r"\D", "", os.path.basename(h)) or 0))) if hits else ""
+
+
 def db_versions(root, envs):
     r = os.path.join(root, "refdata")
     card = ""
@@ -79,7 +85,7 @@ def db_versions(root, envs):
         amrf = newest(os.path.join(envs["amrfinder_env"], "share", "amrfinderplus", "data", "2*"))
     return {
         "geNomad": ("refdata/genomad/genomad_db", first_line(os.path.join(r, "genomad", "genomad_db", "version.txt"))),
-        "GTDB-Tk": ("refdata/gtdbtk", newest(os.path.join(r, "gtdbtk", "release*"))),
+        "GTDB-Tk": ("refdata/gtdbtk", newest_release(os.path.join(r, "gtdbtk", "release*"))),
         "CheckM2": ("refdata/checkm2", newest(os.path.join(r, "checkm2", "CheckM2_database", "*.dmnd"))),
         "GUNC": ("refdata/gunc", newest(os.path.join(r, "gunc", "gunc_db_*.dmnd"))),
         "CheckV": ("refdata/checkv", newest(os.path.join(r, "checkv", "checkv-db-*"))),

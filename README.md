@@ -281,7 +281,7 @@ Scripts handle:
 
 | Database                  | Path                         | Purpose                     | Status                |
 | ------------------------- | ---------------------------- | --------------------------- | --------------------- |
-| **GTDB-Tk r226**          | `refdata/gtdbtk/release226/` | MAG taxonomy                | ✓                     |
+| **GTDB-Tk r232**          | `refdata/gtdbtk/release232/` | MAG taxonomy                | ✓                     |
 | **PLASMe DB**             | `refdata/plasme/DB/`         | Plasmid detection           | ✓                     |
 | **geNomad DB**            | `refdata/genomad/`           | Virus/plasmid detection     | ✓                     |
 | **ViralVerify DB**        | `refdata/viralverify/`       | Auxiliary plasmid data      | ✓                     |
@@ -394,7 +394,7 @@ seed: 42
 references:
   - {acc: GCF_000005845.2, type: host, abundance: 0.30}     # assembly: its plasmids become plasmid records
   - {acc: NC_002516.2, type: host, abundance: 0.10}
-  - {acc: NC_013353.1, type: plasmid, host: NC_002516.2, abundance: 0.01}
+  - {acc: EU935739.1, type: plasmid, host: NC_002516.2, abundance: 0.01}
   - {acc: NC_001416.1, type: phage, abundance: 0.01}
 profiles: {n: 6, sigma: 1.0, copy_sigma: 0.2}            # optional: 6 samples, log-normal abundances
 ```

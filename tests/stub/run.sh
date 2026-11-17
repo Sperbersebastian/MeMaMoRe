@@ -41,7 +41,7 @@ done
 fake external/MAGScoT/MAGScoT.R
 fake external/MAGScoT/hmm/gtdbtk_rel207_tigrfam.hmm
 fake external/MAGScoT/hmm/gtdbtk_rel207_Pfam-A.hmm
-mkdir -p "$WORK/refdata/gtdbtk/release226/markers" "$WORK/refdata/mobsuite_db" "$WORK/refdata/plasme/DB"
+mkdir -p "$WORK/refdata/gtdbtk/release232/markers" "$WORK/refdata/mobsuite_db" "$WORK/refdata/plasme/DB"
 fake refdata/viralverify/pfam/Pfam-A.hmm
 fake refdata/genomad/genomad_db/version.txt
 mkdir -p "$WORK/refdata/iphop/Aug_2023_pub_rw"

@@ -31,7 +31,7 @@ EXTERNAL_DEPTH="${CONTIG_DEPTH:-}"   # optional depth table path
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BINNY_DIR="$(cd "$REPO_ROOT/external/binny" && pwd)"
-GTDBTK_DATA_PATH="${GTDBTK_DATA_PATH:-$REPO_ROOT/refdata/gtdbtk/release226}"
+GTDBTK_DATA_PATH="${GTDBTK_DATA_PATH:-$REPO_ROOT/refdata/gtdbtk}"
 [[ -d "$GTDBTK_DATA_PATH" ]] && export GTDBTK_DATA_PATH || true
 
 mkdir -p \

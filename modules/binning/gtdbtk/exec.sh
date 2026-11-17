@@ -36,14 +36,17 @@ echo "[gtdbtk] .fa files found: ${#fa_files[@]} in $BINS"
 source "$ROOT/bin/lib/memory.sh"
 mem_gate gtdbtk "${GTDBTK_MIN_MEM_GB:-64}" || exit 0
 
-# --- DB: resolve + verify via check_install
-DBROOT_INPUT="${GTDBTK_DATA_PATH:-$ROOT/refdata/gtdbtk/release226}"
+# --- env: GTDB-Tk lives in its own env (gtdbtk_env, envs/create_env_gtdbtk.sh)
+micromamba env list --json | grep -q '/gtdbtk_env"' || bash "$ROOT/envs/create_env_gtdbtk.sh"
+GTDB_ENV="gtdbtk_env"
+
+# --- DB: newest refdata/gtdbtk/release<N> (or GTDBTK_DATA_PATH), verified via check_install
+DBROOT_INPUT="${GTDBTK_DATA_PATH:-$ROOT/refdata/gtdbtk}"
 resolve_dbroot() {
   local d="$1"
   [[ -d "$d/markers" ]] && { echo "$d"; return; }
-  [[ -d "$d/release226/markers" ]] && { echo "$d/release226"; return; }
   local cand
-  cand="$(find "$d" -maxdepth 2 -type d -name 'release*' -exec test -d '{}/markers' \; -print | head -n1 || true)"
+  cand="$(find "$d" -maxdepth 2 -type d -name 'release*' -exec test -d '{}/markers' \; -print | sort -V | tail -n1 || true)"
   [[ -n "${cand:-}" ]] && { echo "$cand"; return; }
   echo "$d"
 }
@@ -51,31 +54,49 @@ DBROOT="$(resolve_dbroot "$DBROOT_INPUT")"
 export GTDBTK_DATA_PATH="$DBROOT"
 echo "[gtdbtk] DB candidate: $GTDBTK_DATA_PATH"
 
-# Verifiziere DB mit GTDB-Tk selbst
-if ! micromamba run -n env_binning gtdbtk check_install >/dev/null; then
+if ! micromamba run -n "$GTDB_ENV" gtdbtk check_install >/dev/null; then
   echo "[gtdbtk] ERROR: gtdbtk check_install failed for: $GTDBTK_DATA_PATH"
   echo "[gtdbtk] Hints:"
-  echo "  - Pfad muss auf den *Release*-Ordner zeigen, der 'markers/', 'pplacer/', 'taxonomy/' etc. enthält."
-  echo "  - Beispiel: $ROOT/refdata/gtdbtk/release226/"
-  echo "  - Inhalt:"
+  echo "  - the path must be the release folder holding markers/, pplacer/, taxonomy/ ..."
+  echo "  - GTDB-Tk >= 2.7 needs release232 or newer: scripts/setup_gtdbtk_data.sh latest"
+  echo "  - content:"
   ls -1 "$GTDBTK_DATA_PATH" || true
   exit 1
 fi
 echo "[gtdbtk] DB verified by check_install."
 
 # --- skip if results exist unless FORCE=1
-# refined bins identity (magscot/<s>/bins/.md5): results are reused only for the same bins
+# refined bins identity (magscot/<s>/bins/.md5) + reference release: results are reused
+# only for the same bins classified against the same GTDB release
 BINS_SUM="$(cat "$ROOT/SRA/binning/magscot/$SAMPLE/bins/.md5" 2>/dev/null || echo none)"
-if [[ "$FORCE" != "1" && "$(cat "$OUT/.bins.md5" 2>/dev/null)" == "$BINS_SUM" ]] && { [[ -s "$OUT/gtdbtk.bac120.summary.tsv" ]] || [[ -s "$OUT/gtdbtk.ar53.summary.tsv" ]]; }; then
+STAMP="$BINS_SUM.$(basename "$DBROOT")"
+if [[ "$FORCE" != "1" && "$(cat "$OUT/.bins.md5" 2>/dev/null)" == "$STAMP" ]] && { [[ -s "$OUT/gtdbtk.bac120.summary.tsv" ]] || [[ -s "$OUT/gtdbtk.ar53.summary.tsv" ]]; }; then
   echo "[gtdbtk] outputs exist and FORCE!=1 -> skip"
   echo "[gtdbtk] -> $OUT"
   echo "[gtdbtk] log -> $LOGFILE"
   exit 0
 fi
 
-# --- run classify_wf auf .fa-Bins
+# --- stale state: GTDB-Tk resumes from $OUT/gtdbtk.json and crashes on a state file of
+#     another version (2.8: "unexpected keyword argument 'skip_ani_screen'"); intermediates
+#     of other bins or another release must not be reused either. Keep them only for an
+#     interrupted run of the same bins, release and GTDB-Tk version.
+GTDB_VER="$(micromamba run -n "$GTDB_ENV" gtdbtk --version 2>/dev/null | awk '/version/{print $3; exit}' || true)"
+RUN_ID="$STAMP.${GTDB_VER:-unknown}"
+if [[ "$FORCE" == "1" || "$(cat "$OUT/.run.id" 2>/dev/null)" != "$RUN_ID" ]]; then
+  echo "[gtdbtk] clearing previous GTDB-Tk output in $OUT"
+  rm -rf "$OUT/identify" "$OUT/align" "$OUT/classify" "$OUT/gtdbtk.json" "$OUT/gtdbtk.log" \
+         "$OUT/gtdbtk.warnings.log" "$OUT/.bins.md5"
+  find "$OUT" -maxdepth 1 -name 'gtdbtk.*.tsv' -delete
+fi
+echo "$RUN_ID" > "$OUT/.run.id"
+
+# --- run classify_wf on the .fa bins
+# --skip_ani_screen exists only up to GTDB-Tk 2.6 (later versions always screen with skani)
+ANI_OPT=()
+micromamba run -n "$GTDB_ENV" gtdbtk classify_wf -h 2>&1 | grep -q -- '--skip_ani_screen' && ANI_OPT=(--skip_ani_screen)
 echo "[gtdbtk] RUN classify_wf cpus=$CPUS bins_dir=$BINS extension=fa"
-micromamba run -n env_binning gtdbtk classify_wf \
+micromamba run -n "$GTDB_ENV" gtdbtk classify_wf \
   --genome_dir "$BINS" \
   --out_dir "$OUT" \
   --extension fa \
@@ -83,8 +104,8 @@ micromamba run -n env_binning gtdbtk classify_wf \
   --pplacer_cpus "$CPUS" \
   --scratch_dir "$SCRATCH" \
   --tmpdir "$TMPDIR" \
-  --skip_ani_screen
+  "${ANI_OPT[@]}"
 
-echo "$BINS_SUM" > "$OUT/.bins.md5"
+echo "$STAMP" > "$OUT/.bins.md5"
 echo "[gtdbtk] DONE -> $OUT"
 echo "[gtdbtk] LOG  -> $LOGFILE"

@@ -29,7 +29,7 @@ PKGS=(
   snakemake "conda>=24.7" conda-libmamba-solver mamba   # snakemake --use-conda (Binny) needs conda >= 24.7
   yq
   metabat2
-  checkm2 gtdbtk
+  checkm2                     # GTDB-Tk has its own env: envs/create_env_gtdbtk.sh
   barrnap tRNAscan-SE
   samtools seqkit
   r-base r-optparse r-dplyr r-readr r-funr r-digest
