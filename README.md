@@ -287,7 +287,7 @@ Scripts handle:
 | **ViralVerify DB**        | `refdata/viralverify/`       | Auxiliary plasmid data      | ✓                     |
 | **HOTSPOT DB**            | `external/HOTSPOT/database/` | Plasmid host prediction     | ✓                     |
 | **VirSorter2 / VIBRANT / CheckV** | `refdata/{virsorter2,vibrant,checkv}/` | Virus detection and QC | ✓ (auto-download) |
-| **iPHoP** (optional)      | `refdata/iphop/*_rw/`        | Virus host prediction       | ~340 GB, manual download |
+| **iPHoP** (optional)      | `refdata/iphop/*_rw/`        | Virus host prediction       | ~340 GB, `scripts/setup_iphop_db.sh` |
 | **DeepARG / CARD / MEGARes** | `refdata/{deeparg,card,amrplusplus}/` | ARG detection     | ✓ (auto-download)     |
 | **VFDB / ResFinder / PlasmidFinder** | bundled with ABRicate | Virulence, ARGs, replicons | ✓                 |
 | **CheckM2**               | `refdata/checkm2/`           | MAG quality                 | ✓ (auto-download)     |

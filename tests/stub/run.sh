@@ -98,6 +98,20 @@ if [[ " ${MODULES[*]} " == *" binning "* ]]; then
   # min_samples=2 so the stub (2 samples) also runs the host-correlation code
   "$WORK/bin/main.sh" run catalog "${SETS[@]}" --set modules.hosts.min_samples=2
 fi
+if [[ " ${MODULES[*]} " == *" viruses "* ]]; then
+  echo "[stub] ===== iPHoP cache ====="
+  s="$SAMPLE"; L="$WORK/logs/viruses_$s.log"
+  "$WORK/bin/main.sh" run viruses --sample "$s" "${SETS[@]}" > /dev/null
+  grep -q '\[iphop\] cached' "$L" || { echo "[stub] FAIL: iPHoP not cached for the same DB"; exit 1; }
+  mkdir -p "$WORK/refdata/iphop/Jun_2025_pub_rw"           # newer DB -> predictions redone
+  mkdir -p "$WORK/refdata/iphop/dl"; echo "DOWNLOADING x" > "$WORK/refdata/iphop/dl/status"
+  "$WORK/bin/main.sh" run viruses --sample "$s" "${SETS[@]}" > /dev/null
+  tail -n 5 "$L" | grep -q 'iphop (DB not ready' || { echo "[stub] FAIL: iPHoP used a DB still downloading"; exit 1; }
+  echo "EXTRACTED x" > "$WORK/refdata/iphop/dl/status"
+  "$WORK/bin/main.sh" run viruses --sample "$s" "${SETS[@]}" > /dev/null
+  grep -q "Jun_2025_pub_rw" "$WORK/SRA/viruses/$s/iphop/.done" || { echo "[stub] FAIL: iPHoP not redone with the new DB"; exit 1; }
+  echo "[stub] iPHoP cache per DB ok"
+fi
 echo "[stub] ===== summary ====="
 "$WORK/bin/main.sh" summary
 echo "[stub] all modules finished: ${MODULES[*]}"
