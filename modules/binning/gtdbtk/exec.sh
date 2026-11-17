@@ -66,14 +66,30 @@ fi
 echo "[gtdbtk] DB verified by check_install."
 
 # --- skip if results exist unless FORCE=1
-# refined bins identity (magscot/<s>/bins/.md5): results are reused only for the same bins
+# refined bins identity (magscot/<s>/bins/.md5) + reference release: results are reused
+# only for the same bins classified against the same GTDB release
 BINS_SUM="$(cat "$ROOT/SRA/binning/magscot/$SAMPLE/bins/.md5" 2>/dev/null || echo none)"
-if [[ "$FORCE" != "1" && "$(cat "$OUT/.bins.md5" 2>/dev/null)" == "$BINS_SUM" ]] && { [[ -s "$OUT/gtdbtk.bac120.summary.tsv" ]] || [[ -s "$OUT/gtdbtk.ar53.summary.tsv" ]]; }; then
+STAMP="$BINS_SUM.$(basename "$DBROOT")"
+if [[ "$FORCE" != "1" && "$(cat "$OUT/.bins.md5" 2>/dev/null)" == "$STAMP" ]] && { [[ -s "$OUT/gtdbtk.bac120.summary.tsv" ]] || [[ -s "$OUT/gtdbtk.ar53.summary.tsv" ]]; }; then
   echo "[gtdbtk] outputs exist and FORCE!=1 -> skip"
   echo "[gtdbtk] -> $OUT"
   echo "[gtdbtk] log -> $LOGFILE"
   exit 0
 fi
+
+# --- stale state: GTDB-Tk resumes from $OUT/gtdbtk.json and crashes on a state file of
+#     another version (2.8: "unexpected keyword argument 'skip_ani_screen'"); intermediates
+#     of other bins or another release must not be reused either. Keep them only for an
+#     interrupted run of the same bins, release and GTDB-Tk version.
+GTDB_VER="$(micromamba run -n "$GTDB_ENV" gtdbtk --version 2>/dev/null | awk '/version/{print $3; exit}' || true)"
+RUN_ID="$STAMP.${GTDB_VER:-unknown}"
+if [[ "$FORCE" == "1" || "$(cat "$OUT/.run.id" 2>/dev/null)" != "$RUN_ID" ]]; then
+  echo "[gtdbtk] clearing previous GTDB-Tk output in $OUT"
+  rm -rf "$OUT/identify" "$OUT/align" "$OUT/classify" "$OUT/gtdbtk.json" "$OUT/gtdbtk.log" \
+         "$OUT/gtdbtk.warnings.log" "$OUT/.bins.md5"
+  find "$OUT" -maxdepth 1 -name 'gtdbtk.*.tsv' -delete
+fi
+echo "$RUN_ID" > "$OUT/.run.id"
 
 # --- run classify_wf on the .fa bins
 # --skip_ani_screen exists only up to GTDB-Tk 2.6 (later versions always screen with skani)
@@ -90,6 +106,6 @@ micromamba run -n "$GTDB_ENV" gtdbtk classify_wf \
   --tmpdir "$TMPDIR" \
   "${ANI_OPT[@]}"
 
-echo "$BINS_SUM" > "$OUT/.bins.md5"
+echo "$STAMP" > "$OUT/.bins.md5"
 echo "[gtdbtk] DONE -> $OUT"
 echo "[gtdbtk] LOG  -> $LOGFILE"
