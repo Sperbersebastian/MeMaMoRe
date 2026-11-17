@@ -4,9 +4,9 @@ cpus: 8
 seed: 42
 
 plasmids:
-  - NC_013353.1   # pEK499
+  - EU935739.1   # pEK499
   - CP000648.1    # pKPN3
-  - CP006657.1    # pECLO
+  - CP006657.1    # K. pneumoniae JM45 p1
 
 phages:
   - NC_001604.1   # T7
@@ -18,7 +18,7 @@ hosts: {}
 n_reads: 200000
 
 abundances:
-  NC_013353.1: 0.25
+  EU935739.1: 0.25
   CP000648.1:  0.23
   CP006657.1:  0.17
   NC_001604.1: 0.13
