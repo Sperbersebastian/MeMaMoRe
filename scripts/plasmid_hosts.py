@@ -8,13 +8,16 @@ plasmids_derep.global.fasta, headers "<sample>|<tool>|<contig>"):
   hotspot_*      HOTSPOT host lineage predicted in the plasmid's own sample
   corr_*         MAG catalog genome whose relative abundance across samples
                  correlates best (Spearman) with the plasmid's abundance (CoverM
-                 TPM per sample, CATALOG_DIR/plasmid_abundance/<s>.tsv); reported
+                 mean coverage per sample, CATALOG_DIR/plasmid_abundance/<s>.tsv,
+                 divided by the sample's QC read count); reported
                  when rho >= MIN_RHO and permutation p <= MAX_P, and only with
                  >= MIN_SAMPLES samples (otherwise a note)
   crispr_*       filled by the CRISPR spacer step when present (crispr_hits.tsv)
 Writes SRA/summary/plasmid_hosts.tsv. Standard library only.
 """
 import csv
+import glob
+import json
 import os
 import random
 import sys
@@ -62,6 +65,22 @@ def spearman(x, y, n_perm=2000, seed=1):
     return rho, (hits + 1) / (n_perm + 1)
 
 
+def qc_reads(sra, s):
+    """QC read count of a sample (hostile reads_out, else fastp after filtering), or None."""
+    try:
+        with open(os.path.join(sra, "qc", "hostile", s, "hostile.json")) as f:
+            return float(json.load(f)[0]["reads_out"]) or None
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        pass
+    for fj in glob.glob(os.path.join(sra, "qc", "fastp", s, "*.fastp.json")):
+        try:
+            with open(fj) as f:
+                return float(json.load(f)["summary"]["after_filtering"]["total_reads"]) or None
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    return None
+
+
 def main():
     root, cat = os.path.abspath(sys.argv[1]), sys.argv[2]
     min_samples, min_rho, max_p = int(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5])
@@ -85,14 +104,22 @@ def main():
         for r in read(os.path.join(sra, "plasmids", s, "hotspot", "host_lineage.tsv")):
             hot[(s, r.get("Contig", ""))] = r
 
-    # abundance profiles
-    pab = {}   # rep -> {sample: tpm}
+    # abundance profiles: mean coverage per QC read. TPM would be relative to the other
+    # plasmid candidates only, so chromosome fragments among them (or any shift in the
+    # plasmid pool) would distort every profile; the MAG side (CoverM relative abundance)
+    # is relative to all reads of the sample as well.
+    nreads = {s: qc_reads(sra, s) for s in samples}
+    if any(v is None for v in nreads.values()):
+        print("[hosts] WARNING: no QC read count for " + ",".join(s for s, v in nreads.items() if v is None)
+              + ": plasmid coverage not depth-normalised there")
+    pab = {}   # rep -> {sample: mean coverage per million QC reads}
     for s in samples:
+        scale = 1e6 / nreads[s] if nreads[s] else 1.0
         for r in read(os.path.join(cat, "plasmid_abundance", f"{s}.tsv")):
             c = r.get("Contig", "")
             for k, v in r.items():
-                if k.endswith(" TPM"):
-                    pab.setdefault(c, {})[s] = float(v or 0)
+                if k.endswith(" Mean"):
+                    pab.setdefault(c, {})[s] = float(v or 0) * scale
     mags = read(os.path.join(sra, "summary", "mag_catalog.tsv"))
     mab = {}
     for m in mags:
