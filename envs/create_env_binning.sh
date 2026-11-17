@@ -26,7 +26,7 @@ MANTIS_REF="$ROOT/refdata/mantis/NCBI"
 
 # Core packages for env_binning
 PKGS=(
-  snakemake conda conda-libmamba-solver mamba
+  snakemake "conda>=24.7" conda-libmamba-solver mamba   # snakemake --use-conda (Binny) needs conda >= 24.7
   yq
   metabat2
   checkm2 gtdbtk
@@ -57,7 +57,8 @@ micromamba run -n "$ENV_NAME" bash -lc '
 echo "[ok] core tools present in $ENV_NAME"
 
 # -----------------------------
-# COMEBin env (auto CPU/GPU)
+# COMEBin env (auto CPU/GPU). COMEBin >= 1.1 needs PyTorch >= 2.3 (torch.amp), i.e. the
+# conda-forge builds; the old "pytorch" channel stops at Python 3.7 / PyTorch 1.x.
 # -----------------------------
 if micromamba env list --json | grep -o '"/[^"]*"' | tr -d '"' | sed 's#.*/##' | grep -qx "$COMEBIN_ENV"; then
   echo "[comebin] env exists: $COMEBIN_ENV"
@@ -65,12 +66,12 @@ else
   echo "[comebin] creating $COMEBIN_ENV (auto GPU detect)"
   if command -v nvidia-smi >/dev/null 2>&1; then
     echo "[gpu] NVIDIA GPU detected -> CUDA build"
-    micromamba create -y -n "$COMEBIN_ENV" -c bioconda -c conda-forge -c pytorch -c nvidia \
-      comebin pytorch torchvision torchaudio "pytorch-cuda=11.8"
+    micromamba create -y -n "$COMEBIN_ENV" -c conda-forge -c bioconda \
+      "comebin>=1.1" "pytorch=*=cuda*"
   else
     echo "[cpu] No GPU -> CPU-only build"
-    micromamba create -y -n "$COMEBIN_ENV" -c bioconda -c conda-forge -c pytorch \
-      comebin pytorch torchvision torchaudio cpuonly
+    micromamba create -y -n "$COMEBIN_ENV" -c conda-forge -c bioconda \
+      "comebin>=1.1" "pytorch=*=cpu*"
   fi
 fi
 

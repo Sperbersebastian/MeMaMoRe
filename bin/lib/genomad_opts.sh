@@ -17,3 +17,14 @@ genomad_opts(){
   esac
   return 0
 }
+
+#   genomad_restart IN OUT FORCE -> prints "--restart" when FORCE=1 or when OUT holds
+#   intermediate files older than IN (new contigs): geNomad otherwise skips every step
+#   whose output exists ("Previous execution detected") and reports on stale data.
+genomad_restart(){
+  local in="$1" out="$2" force="${3:-0}"
+  if [[ "$force" == "1" ]] || [[ -n "$(find "$out" -mindepth 2 -type f ! -newer "$in" -print -quit 2>/dev/null)" ]]; then
+    echo "--restart"
+  fi
+  return 0
+}

@@ -82,6 +82,7 @@ echo -e "context\tlabel\tgene\tproduct\tcontig\tidentity\tcoverage\taccession" >
 echo -e "context\tlabel\treplicon\tcontig\tidentity\tcoverage\taccession" > "$REP"
 for f in "$ABR_DIR"/*/contigs/*.tsv; do   # one scan of all contigs; context derived below
   [[ -s "$f" ]] || continue
+  [[ "$f" == *.argnorm.tsv ]] && continue   # argNorm copy of resfinder (read by arg_context.py)
   db=$(basename "$(dirname "$(dirname "$f")")"); context=$(basename "$(dirname "$f")"); label=$(basename "$f" .tsv)
   case "$db" in
     vfdb)

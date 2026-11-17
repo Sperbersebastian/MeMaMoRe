@@ -155,8 +155,10 @@ def fastp():
 
 
 def fastqc():
-    out = mkdir(opt("-o", "--outdir"))
-    for f in positional(skip_values_for=("-o", "--outdir", "-t", "--threads")):
+    if "-o" in ARGS:   # FastQC >= 0.13 knows only --outdir
+        sys.exit("fastqc: error: unrecognized arguments: -o")
+    out = mkdir(opt("--outdir"))
+    for f in positional(skip_values_for=("--outdir", "-t", "--threads")):
         base = os.path.basename(f).replace(".fastq.gz", "").replace(".fq.gz", "")
         write(out / f"{base}_fastqc.html", "<html>stub fastqc</html>\n")
         write(out / f"{base}_fastqc.zip", "stub\n")
@@ -482,7 +484,12 @@ def checkm2():
 
 
 def barrnap():
-    ids = [ln[1:].split()[0] for ln in sys.stdin if ln.startswith(">")]
+    """barrnap [--threads N] seq.fa > rna.gff (like barrnap >= 1.x: no stdin input)."""
+    fa = positional(skip_values_for=("--threads", "--kingdom", "--evalue", "--outseq", "--dbdir", "--gcode"))
+    if not fa:
+        sys.exit("[barrnap] ERROR: No input sequence files provided")
+    with open(fa[-1]) as f:
+        ids = [ln[1:].split()[0] for ln in f if ln.startswith(">")]
     sys.stdout.write("##gff-version 3\n")
     if ids:
         sys.stdout.write(f"{ids[0]}\tbarrnap:0.9\trRNA\t100\t1600\t1e-200\t+\t.\tName=16S_rRNA;product=16S ribosomal RNA\n")

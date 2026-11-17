@@ -58,6 +58,32 @@ else
   exit 3
 fi
 
+# ── Batch size: COMEBin trains on contigs > 1000 bp with drop_last, but run_comebin.sh
+# caps the batch size (1024) by the count of all contigs; with fewer usable contigs no
+# batch is formed and training dies ("logits referenced before assignment").
+NTRAIN="$(awk '/^>/{if(l>1000)n++; l=0; next} {l+=length($0)} END{if(l>1000)n++; print n+0}' "$CONTIGS")"
+BATCH=1024
+(( NTRAIN < BATCH )) && BATCH="$NTRAIN"
+(( BATCH >= 64 )) || { echo "[COMEBin] only $NTRAIN contigs > 1000 bp, too few to train -> skip"; exit 4; }
+
+# ── Device: COMEBin >= 1.1 trains on "cuda" unless told otherwise and stops without a GPU.
+# modules.binning.comebin_device: auto (default; cuda when nvidia-smi sees a GPU) | cpu | cuda[:N]
+DEV_OPT=()
+if "${RUNNER_CMD[@]}" -h 2>/dev/null | grep -q -- '-d STR'; then
+  DEVICE="auto"
+  if [[ -n "$PARAMS_YAML" && -s "$PARAMS_YAML" ]]; then
+    set +e
+    DEVICE="$("$MM" run -n env_sra_tools python "$ROOT/scripts/merge_params.py" --defaults "$PARAMS_YAML" --get modules.binning.comebin_device 2>/dev/null)"
+    set -e
+    DEVICE="${DEVICE:-auto}"
+  fi
+  if [[ "$DEVICE" == "auto" ]]; then
+    if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then DEVICE=cuda; else DEVICE=cpu; fi
+  fi
+  DEV_OPT=(-d "$DEVICE")
+  echo "[COMEBin] training device: $DEVICE"
+fi
+
 # ── Detect existing outputs
 have_bins(){
   compgen -G "$OUT_DIR/comebin_res/comebin_res_bins/"*.fa >/dev/null || \
@@ -72,7 +98,8 @@ if [[ "$FORCE" == "1" ]] || ! have_bins; then
     -a "$CONTIGS" \
     -p "$BAM_DIR" \
     -o "$OUT_DIR" \
-    -t "$THREADS" | tee "$LOG"
+    -t "$THREADS" \
+    -b "$BATCH" "${DEV_OPT[@]}" | tee "$LOG"
   set +o pipefail
 else
   j "bins already exist → skipping COMEBin run"
