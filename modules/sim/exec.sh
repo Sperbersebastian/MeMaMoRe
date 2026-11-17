@@ -38,6 +38,15 @@ dl() {
 # downloads (one folder per reference type)
 while IFS=$'\t' read -r acc type _host; do
   dl "$acc" "$REFDIR/refs/${type}s"
+  # plausibility: a listed plasmid must be one (a chromosome accession here silently turns
+  # the plasmid truth into a second host genome)
+  if [[ "$type" == "plasmid" && ! "$acc" =~ ^GCF_|^GCA_ ]]; then
+    f="$REFDIR/refs/plasmids/$acc.fna"
+    len=$(grep -v '^>' "$f" | tr -d '\n' | wc -c)
+    if ! head -n1 "$f" | grep -qi 'plasmid' || (( len > 1500000 )); then
+      echo "[warn] $acc is listed as plasmid, but its header lacks \"plasmid\" or it is > 1.5 Mb ($len bp): $(head -n1 "$f" | cut -c2-120)"
+    fi
+  fi
 done < <(tail -n +2 "$PLAN/references.tsv")
 
 # combine fasta and write the truth table per sequence record. Records keep the first word

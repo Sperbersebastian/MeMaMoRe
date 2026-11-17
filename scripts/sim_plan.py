@@ -19,7 +19,7 @@ Legacy (config/sim.yaml, config/testsets/*.yaml):
 Extended:
   references:
     - {acc: NC_000913.3, type: host, abundance: 0.30}
-    - {acc: NC_013353.1, type: plasmid, host: NC_000913.3, abundance: 0.007}
+    - {acc: EU935739.1, type: plasmid, host: NC_000913.3, abundance: 0.007}
   samples:                      # optional, explicit per-sample weights
     - {name: a, abundances: {NC_000913.3: 0.2, ...}}
   profiles: {n: 6, sigma: 1.0, copy_sigma: 0.2}   # optional, generated samples

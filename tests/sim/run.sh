@@ -37,7 +37,7 @@ seed: 7
 references:
   - {acc: GCF_000005845.2, type: host, abundance: 0.5}
   - {acc: NC_002516.2, type: host, abundance: 0.3}
-  - {acc: NC_013353.1, type: plasmid, host: NC_002516.2, abundance: 0.1}
+  - {acc: EU935739.1, type: plasmid, host: NC_002516.2, abundance: 0.1}
   - {acc: NC_001416.1, type: phage, abundance: 0.1}
 profiles: {n: 3, sigma: 1.0, copy_sigma: 0.1}
 YAML
@@ -51,7 +51,7 @@ for s in simtest_s1 simtest_s2 simtest_s3; do
 done
 grep -q $'^plasmid\tNZ_PL000005.1\tsimtest\tGCF_000005845.2\t' "$T/truth/provenance.tsv" || fail "assembly plasmid not typed plasmid with host"
 grep -q $'^host\tNZ_CHR000005.1\tsimtest\t\t' "$T/truth/provenance.tsv" || fail "assembly chromosome not typed host"
-grep -q $'^plasmid\tNC_013353.1\tsimtest\tNC_002516.2\t' "$T/truth/provenance.tsv" || fail "host link of listed plasmid lost"
+grep -q $'^plasmid\tEU935739.1\tsimtest\tNC_002516.2\t' "$T/truth/provenance.tsv" || fail "host link of listed plasmid lost"
 grep -c '^>' "$T/refs/combined.fna" | grep -qx 5 || fail "combined.fna should hold 5 records"
 # a host-linked plasmid follows its host across samples (ratio varies only by copy_sigma)
 python3 - "$T/truth/weights.tsv" <<'PY' || fail "plasmid/host weights do not co-vary"
@@ -59,7 +59,7 @@ import csv, sys, statistics as st
 w = {}
 for r in csv.DictReader(open(sys.argv[1]), delimiter="\t"):
     w.setdefault(r["sample"], {})[r["accession"]] = float(r["weight"])
-ratio = [s["NC_013353.1"] / s["NC_002516.2"] for s in w.values()]
+ratio = [s["EU935739.1"] / s["NC_002516.2"] for s in w.values()]
 host = [s["NC_002516.2"] for s in w.values()]
 assert st.pstdev(ratio) / st.mean(ratio) < st.pstdev(host) / st.mean(host), (ratio, host)
 PY
