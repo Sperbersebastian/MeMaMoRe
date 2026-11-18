@@ -39,6 +39,17 @@ if [[ ! -d "$CARD_DATA/localDB" ]]; then
   echo "[rgi] CARD database loaded"
 fi
 
+# A DIAMOND update (RGI >= 6.0.5 needs DIAMOND >= 2.1.10) makes an index built by an older
+# DIAMOND unreadable ("Database was built with an older version"): rebuild it from the
+# CARD protein FASTA, keeping the old index as *.bak.
+DMND="$CARD_DATA/localDB/protein.db.dmnd"
+if [[ -s "$DMND" ]] && command -v diamond >/dev/null 2>&1 && ! diamond dbinfo -d "$DMND" >/dev/null 2>&1; then
+  echo "[rgi] CARD DIAMOND index incompatible with $(diamond version 2>/dev/null) -> rebuilding"
+  mv -f "$DMND" "$DMND.bak"
+  diamond makedb --in "$CARD_DATA/localDB/proteindb.fsa" -d "${DMND%.dmnd}" --quiet \
+    || { mv -f "$DMND.bak" "$DMND"; echo "[rgi] DIAMOND makedb failed"; exit 5; }
+fi
+
 NCPUS=$(( CPUS < $(nproc) ? CPUS : $(nproc) ))
 
 # ---- input: central gene calls; RGI protein mode on genes.faa ----
