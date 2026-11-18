@@ -22,7 +22,11 @@ DB="$(cd "$DB" && pwd -P)"
 # results are reused only for the same database (a run against the test DB or an
 # older release is redone once a new DB is present)
 if [[ -s "$DONE" ]] && [[ "$(sed -n 2p "$DONE")" == "$DB" ]]; then echo "[iphop] cached ($DB)"; exit 0; fi
-rm -rf "$OUT/result" "$OUT/host_genus.csv"
+# a run interrupted with the same DB (e.g. OOM in RaFAH) resumes: iPHoP skips the steps
+# whose outputs exist in result/Wdir; a different DB starts from scratch
+if [[ "$(cat "$OUT/.db" 2>/dev/null)" != "$DB" ]]; then rm -rf "$OUT/result"; fi
+rm -f "$OUT/host_genus.csv"
+mkdir -p "$OUT"; echo "$DB" > "$OUT/.db"
 
 UNION="$ROOT/SRA/viruses/$SAMPLE/union/viruses_union.fasta"
 CHECKV="$ROOT/SRA/viruses/$SAMPLE/checkv/quality_summary.tsv"

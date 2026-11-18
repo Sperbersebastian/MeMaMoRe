@@ -118,7 +118,10 @@ Missing environments are also created on first use. Reference databases live in
 Plasmer ~32 GB of RAM + swap; below that they are skipped with a message
 (`GTDBTK_FORCE=1` / `PLASMER_FORCE=1` override). With swap they also run on small
 machines, only slower: on a 15 GB laptop with 50 GB swap, GTDB-Tk took 25 min and
-Plasmer 34 min for the mock sample (peak swap 6 / 9 GB).
+Plasmer 34 min for the mock sample (peak swap 6 / 9 GB). iPHoP with the full DB needs ~12 GB of RAM in its
+RaFAH step alone; set `CPUS=4` for `run viruses` on small machines (WIsH memory grows
+with threads) and allow swap. An interrupted iPHoP run resumes at the failed step
+when rerun with the same DB.
 
 ### Optional steps
 
