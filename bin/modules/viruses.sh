@@ -88,8 +88,14 @@ _run_step "checkv"          "$MOD/checkv/exec.sh"       "$SAMPLE"
 # 7) iPHoP host prediction: optional, only with a downloaded DB (~340 GB);
 #    checked here so the (large) iphop_env is not created without a DB
 IPHOP_DB="${IPHOP_DB:-$(find "$ROOT/refdata/iphop" -mindepth 1 -maxdepth 1 -type d -name '*_rw' 2>/dev/null | sort | tail -n1 || true)}"
-if [[ -n "$IPHOP_DB" && -d "$IPHOP_DB" ]]; then
+# a DB still being downloaded/unpacked by scripts/setup_iphop_db.sh (status not EXTRACTED) is not used
+IPHOP_STATUS="$ROOT/refdata/iphop/dl/status"
+if [[ -s "$IPHOP_STATUS" ]] && ! grep -q '^EXTRACTED' "$IPHOP_STATUS"; then
+  echo "[skip] $SAMPLE :: iphop (DB not ready: $(head -n1 "$IPHOP_STATUS"))"
+elif [[ -n "$IPHOP_DB" && -d "$IPHOP_DB" ]]; then
   export IPHOP_DB
+  # the step itself caches per database, so a new DB redoes older predictions
+  rm -f "$OUTDIR/.done/iphop.done"
   _run_step "iphop"         "$MOD/iphop/exec.sh"        "$SAMPLE"
 else
   echo "[skip] $SAMPLE :: iphop (no DB under $ROOT/refdata/iphop; see envs/create_env_iphop.sh)"

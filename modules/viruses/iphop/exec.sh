@@ -3,7 +3,7 @@
 # iPHoP host prediction for the virus contigs that CheckV rates at least
 # medium-quality (all union contigs if CheckV is missing).
 # Optional step: bin/modules/viruses.sh only calls it when the iPHoP DB exists
-# (~340 GB, `iphop download --db_dir "$ROOT/refdata/iphop"`).
+# (~340 GB, scripts/setup_iphop_db.sh).
 # Usage: exec.sh ROOT SAMPLE [CPUS] [FORCE]
 # Env:   IPHOP_DB (default: first $ROOT/refdata/iphop/*_pub_rw dir)
 set -euo pipefail
@@ -13,12 +13,20 @@ ROOT="${1:?}"; SAMPLE="${2:?}"; CPUS="${3:-16}"; FORCE="${4:-0}"
 OUT="$ROOT/SRA/viruses/$SAMPLE/iphop"; mkdir -p "$OUT"
 DONE="$OUT/.done"
 [[ "$FORCE" == "1" ]] && rm -f "$DONE"
-[[ -s "$DONE" ]] && { echo "[iphop] cached"; exit 0; }
 
 command -v iphop >/dev/null 2>&1 || { echo "[iphop] iphop not in PATH"; exit 3; }
 
 DB="${IPHOP_DB:-$(find "$ROOT/refdata/iphop" -mindepth 1 -maxdepth 1 -type d -name '*_rw' 2>/dev/null | sort | tail -n1 || true)}"
 [[ -n "$DB" && -d "$DB" ]] || { echo "[iphop] DB missing (set IPHOP_DB or download into $ROOT/refdata/iphop)"; exit 2; }
+DB="$(cd "$DB" && pwd -P)"
+# results are reused only for the same database (a run against the test DB or an
+# older release is redone once a new DB is present)
+if [[ -s "$DONE" ]] && [[ "$(sed -n 2p "$DONE")" == "$DB" ]]; then echo "[iphop] cached ($DB)"; exit 0; fi
+# a run interrupted with the same DB (e.g. OOM in RaFAH) resumes: iPHoP skips the steps
+# whose outputs exist in result/Wdir; a different DB starts from scratch
+if [[ "$(cat "$OUT/.db" 2>/dev/null)" != "$DB" ]]; then rm -rf "$OUT/result"; fi
+rm -f "$OUT/host_genus.csv"
+mkdir -p "$OUT"; echo "$DB" > "$OUT/.db"
 
 UNION="$ROOT/SRA/viruses/$SAMPLE/union/viruses_union.fasta"
 CHECKV="$ROOT/SRA/viruses/$SAMPLE/checkv/quality_summary.tsv"
@@ -33,7 +41,7 @@ else
   cp -f "$UNION" "$IN"
 fi
 n=$(grep -c '^>' "$IN" || true)
-[[ "$n" -gt 0 ]] || { echo "[iphop] no medium+ quality viruses for $SAMPLE"; date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"; exit 0; }
+[[ "$n" -gt 0 ]] || { echo "[iphop] no medium+ quality viruses for $SAMPLE"; printf '%s\n%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DB" > "$DONE"; exit 0; }
 
 echo "[iphop] predicting hosts for $n virus contig(s) with $DB"
 iphop predict --fa_file "$IN" --db_dir "$DB" --out_dir "$OUT/result" --num_threads "$CPUS"
@@ -46,5 +54,5 @@ if [[ -n "$G" ]]; then
 else
   echo "[iphop] WARNING: no genus-level prediction file in $OUT/result"
 fi
-date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DONE"
+printf '%s\n%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DB" > "$DONE"
 echo "[iphop] done -> $OUT"

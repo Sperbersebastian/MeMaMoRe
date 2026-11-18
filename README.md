@@ -118,7 +118,10 @@ Missing environments are also created on first use. Reference databases live in
 Plasmer ~32 GB of RAM + swap; below that they are skipped with a message
 (`GTDBTK_FORCE=1` / `PLASMER_FORCE=1` override). With swap they also run on small
 machines, only slower: on a 15 GB laptop with 50 GB swap, GTDB-Tk took 25 min and
-Plasmer 34 min for the mock sample (peak swap 6 / 9 GB).
+Plasmer 34 min for the mock sample (peak swap 6 / 9 GB). iPHoP with the full DB needs ~12 GB of RAM in its
+RaFAH step alone; set `CPUS=4` for `run viruses` on small machines (WIsH memory grows
+with threads) and allow swap. An interrupted iPHoP run resumes at the failed step
+when rerun with the same DB.
 
 ### Optional steps
 
@@ -287,7 +290,7 @@ Scripts handle:
 | **ViralVerify DB**        | `refdata/viralverify/`       | Auxiliary plasmid data      | ✓                     |
 | **HOTSPOT DB**            | `external/HOTSPOT/database/` | Plasmid host prediction     | ✓                     |
 | **VirSorter2 / VIBRANT / CheckV** | `refdata/{virsorter2,vibrant,checkv}/` | Virus detection and QC | ✓ (auto-download) |
-| **iPHoP** (optional)      | `refdata/iphop/*_rw/`        | Virus host prediction       | ~340 GB, manual download |
+| **iPHoP** (optional)      | `refdata/iphop/*_rw/`        | Virus host prediction       | ~340 GB, `scripts/setup_iphop_db.sh` |
 | **DeepARG / CARD / MEGARes** | `refdata/{deeparg,card,amrplusplus}/` | ARG detection     | ✓ (auto-download)     |
 | **VFDB / ResFinder / PlasmidFinder** | bundled with ABRicate | Virulence, ARGs, replicons | ✓                 |
 | **CheckM2**               | `refdata/checkm2/`           | MAG quality                 | ✓ (auto-download)     |
